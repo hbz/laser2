@@ -1,7 +1,6 @@
 package de.laser
 
 import com.k_int.kbplus.ChangeNotificationService
-import com.k_int.kbplus.GenericOIDService
 import de.laser.titles.TitleHistoryEventParticipant
 import de.laser.titles.TitleInstance
 import com.k_int.kbplus.GlobalSourceSyncService
@@ -17,7 +16,6 @@ import grails.util.Holders
 import groovy.util.slurpersupport.GPathResult
 import groovy.util.slurpersupport.NodeChildren
 import groovyx.net.http.HTTPBuilder
-import grails.core.GrailsApplication
 import grails.web.mapping.LinkGenerator
 import org.springframework.transaction.TransactionStatus
 
@@ -113,7 +111,7 @@ class YodaService {
                 GPathResult titleB
                 GPathResult oaiRecord = oaiRecords.get(titleA.gokbId)
                 if(!oaiRecord) {
-                    oaiRecord = globalSourceSyncService.fetchRecord(grs.uri,'titles',[verb:'GetRecord',metadataPrefix:grs.fullPrefix,identifier:titleA.gokbId])
+                    oaiRecord = globalSourceSyncService.fetchRecordOAI('titles',[verb:'GetRecord', identifier:titleA.gokbId])
                     if(oaiRecord)
                         oaiRecords.put(titleA.gokbId,oaiRecord)
                 }
@@ -127,7 +125,7 @@ class YodaService {
                             TitleInstancePackagePlatform referenceTIPP = titleA.tipps[0]
                             GPathResult packageOAI = oaiRecords.get(referenceTIPP.pkg.gokbId)
                             if(!packageOAI) {
-                                packageOAI = globalSourceSyncService.fetchRecord(grs.uri,'packages',[verb:'GetRecord',metadataPrefix:grs.fullPrefix,identifier:referenceTIPP.pkg.gokbId])
+                                packageOAI = globalSourceSyncService.fetchRecordOAI('packages',[verb:'GetRecord', identifier:referenceTIPP.pkg.gokbId])
                                 if(packageOAI)
                                     oaiRecords.put(referenceTIPP.pkg.gokbId,packageOAI)
                             }
@@ -187,7 +185,7 @@ class YodaService {
                                     GPathResult candidateRecord = oaiRecords.get(titleCandidate.gokbId)
                                     println("attempt get with link ${grs.uri}?verb=GetRecord&metadataPrefix=${grs.fullPrefix}&identifier=${titleCandidate.gokbId} ...")
                                     if(!candidateRecord) {
-                                        candidateRecord = globalSourceSyncService.fetchRecord(grs.uri,'titles',[verb:'GetRecord',metadataPrefix:grs.fullPrefix,identifier:titleCandidate.gokbId])
+                                        candidateRecord = globalSourceSyncService.fetchRecordOAI('titles',[verb:'GetRecord', identifier:titleCandidate.gokbId])
                                         if(candidateRecord)
                                             oaiRecords.put(titleCandidate.gokbId,candidateRecord)
                                     }
@@ -724,7 +722,7 @@ class YodaService {
                     TitleInstancePackagePlatform referenceTIPP = platform.tipps[0]
                     GPathResult packageRecord = oaiRecords.get(referenceTIPP.pkg.gokbId)
                     if(!packageRecord) {
-                        packageRecord = globalSourceSyncService.fetchRecord(grs.uri,'packages',[verb:'GetRecord',metadataPrefix:grs.fullPrefix,identifier:referenceTIPP.pkg.gokbId])
+                        packageRecord = globalSourceSyncService.fetchRecordOAI('packages',[verb:'GetRecord', identifier:referenceTIPP.pkg.gokbId])
                         oaiRecords.put(referenceTIPP.pkg.gokbId,packageRecord)
                     }
                     if(packageRecord.record.metadata.gokb.package) {

@@ -42,9 +42,16 @@
               <td>${source.haveUpTo}</td>
               <td>${source.uri}</td>
               <td>${source.editUri}</td>
-              <td><g:link
-                      uri="${source.uri + '?verb=ListRecords&metadataPrefix=' + source.fullPrefix + '&from=' + formatDate(format: "yyyy-MM-dd'T'HH:mm:ss'Z'", date: source.haveUpTo)}"
-                      target="_blank">Link</g:link></td>
+              <td>
+                  <g:if test="${source.type == "OAI"}">
+                      <g:link uri="${source.uri + '?verb=ListRecords&metadataPrefix=' + source.fullPrefix + '&from=' + formatDate(format: "yyyy-MM-dd'T'HH:mm:ss'Z'", date: source.haveUpTo)}"
+                              target="_blank">Link</g:link>
+                  </g:if>
+                  <g:elseif test="${source.type == "JSON"}">
+                      <g:link uri="${source.uri + '&changedSince=' + formatDate(format: "yyyy-MM-dd HH:mm:ss", date: source.haveUpTo)}"
+                              target="_blank">Link</g:link>
+                  </g:elseif>
+              </td>
               <td>${source.listPrefix}</td>
               <td>${source.fullPrefix}</td>
               <td>${source.principal}</td>

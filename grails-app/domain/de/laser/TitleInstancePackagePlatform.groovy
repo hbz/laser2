@@ -30,8 +30,12 @@ class TitleInstancePackagePlatform extends AbstractBase /*implements AuditableTr
     Date accessEndDate
     Date coreStatusStart
     Date coreStatusEnd
+    String name
+    String seriesName
+    String subjectReference
     String rectype="so"
     String gokbId
+    TitleInstance title
 
     @RefdataAnnotation(cat = RDConstants.TIPP_STATUS)
     RefdataValue status
@@ -62,8 +66,7 @@ class TitleInstancePackagePlatform extends AbstractBase /*implements AuditableTr
 
   static belongsTo = [
     pkg:Package,
-    platform:Platform,
-    title:TitleInstance
+    platform:Platform
   ]
 
     static transients = [
@@ -79,6 +82,9 @@ class TitleInstancePackagePlatform extends AbstractBase /*implements AuditableTr
                pkg column:'tipp_pkg_fk',    index: 'tipp_idx'
           platform column:'tipp_plat_fk',   index: 'tipp_idx'
              title column:'tipp_ti_fk',     index: 'tipp_idx'
+              name column:'tipp_name_fk'
+        seriesName column:'tipp_series_name_fk'
+  subjectReference column:'tipp_subject_reference_fk'
             gokbId column:'tipp_gokb_id'
             status column:'tipp_status_rv_fk'
          delayedOA column:'tipp_delayedoa_rv_fk'
@@ -104,6 +110,10 @@ class TitleInstancePackagePlatform extends AbstractBase /*implements AuditableTr
         globalUID(nullable:true, blank:false, unique:true, maxSize:255)
         gokbId (blank:false, unique: true, maxSize:511)
         status      (nullable:true)
+        name        (nullable:true) //backwards-compatibility until TitleInstance fields have been mapped to TitleInstancePackagePlatform
+        seriesName  (nullable:true) //backwards-compatibility until TitleInstance fields have been mapped to TitleInstancePackagePlatform
+    subjectReference(nullable:true) //backwards-compatibility until TitleInstance fields have been mapped to TitleInstancePackagePlatform
+        title       (nullable:true) //Is correct! TitleInstances as central instances are not needed in LAS:eR, no need to reflect central bibliographic entity
         delayedOA   (nullable:true)
         hybridOA    (nullable:true)
         statusReason(nullable:true)

@@ -1210,7 +1210,7 @@ class SubscriptionControllerService {
                 log.debug("linkPackage. Global Record Source URL: " +source.baseUrl)
                 globalSourceSyncService.source = source
                 String addType = params.addType
-                GPathResult packageRecord = globalSourceSyncService.fetchRecord(source.uri,'packages',[verb:'GetRecord', metadataPrefix:'gokb', identifier:params.addUUID])
+                GPathResult packageRecord = globalSourceSyncService.fetchRecordOAI('packages',[verb:'GetRecord', identifier:params.addUUID])
                 if(packageRecord && packageRecord.record?.header?.status?.text() != 'deleted') {
                     result.packageName = packageRecord.record.metadata.gokb.package.name
                     if(!Package.findByGokbId(pkgUUID)) {

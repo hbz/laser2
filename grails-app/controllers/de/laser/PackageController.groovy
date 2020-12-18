@@ -728,8 +728,8 @@ class PackageController  {
         String baseUrl = ApiSource.findByTypAndActive(ApiSource.ApiTyp.GOKBAPI,true).baseUrl
         GlobalRecordSource source = GlobalRecordSource.findByUri("${baseUrl}/gokb/oai/packages")
         log.debug("addToSub. Global Record Source URL: " +source.baseUrl)
-        globalSourceSyncService.source = source
-        GPathResult packageRecord = globalSourceSyncService.fetchRecord(source.uri,'packages',[verb:'GetRecord',metadataPrefix:'gokb',identifier:pkg.gokbId])
+        globalSourceSyncService.setSource(source)
+        GPathResult packageRecord = globalSourceSyncService.fetchRecordOAI('packages',[verb:'GetRecord', identifier:pkg.gokbId])
         if(packageRecord && packageRecord.record?.header?.status?.text() != 'deleted') {
             pkg.addToSubscription(sub, add_entitlements)
             if(add_entitlements) {

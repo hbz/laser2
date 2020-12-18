@@ -15,6 +15,21 @@ class DateUtils {
     public static final String DATE_FORMAT_NOZ              = 'default.date.format.noZ'
     public static final String DATE_FORMAT_ONLYTIME         = 'default.date.format.onlytime'
 
+    static final List<SimpleDateFormat> SUPPORTED_FORMATS = [
+            new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S"),
+            new SimpleDateFormat('yyyy-MM-dd'),
+            new SimpleDateFormat('yyyy/MM/dd'),
+            new SimpleDateFormat('dd.MM.yy'),
+            new SimpleDateFormat('dd.MM.yyyy'),
+            new SimpleDateFormat('MM.yy'),
+            new SimpleDateFormat('MM.yyyy'),
+            new SimpleDateFormat('dd/MM/yy'),//Parsing was wrong, needs to be under supervision
+            new SimpleDateFormat('dd/MM/yyyy'),
+            new SimpleDateFormat('yyyy/MM'),
+            new SimpleDateFormat('yyyy')
+    ]
+
     /** This is a Utility-Class. There are only static methods. It is not necessary to create an instance */
     private DateUtils(){}
 
@@ -66,23 +81,8 @@ class DateUtils {
     static Date parseDateGeneric(String value) {
         Date parsed_date
 
-        List<SimpleDateFormat> supportedFormats = [
-                new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'"),
-                new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S"),
-                new SimpleDateFormat('yyyy-MM-dd'),
-                new SimpleDateFormat('yyyy/MM/dd'),
-                new SimpleDateFormat('dd.MM.yy'),
-                new SimpleDateFormat('dd.MM.yyyy'),
-                new SimpleDateFormat('MM.yy'),
-                new SimpleDateFormat('MM.yyyy'),
-                new SimpleDateFormat('dd/MM/yy'),//Parsing was wrong, needs to be under supervision
-                new SimpleDateFormat('dd/MM/yyyy'),
-                new SimpleDateFormat('yyyy/MM'),
-                new SimpleDateFormat('yyyy')
-        ]
-
         if (value && (value.trim().length() > 0)) {
-            for (Iterator<SimpleDateFormat> i = supportedFormats.iterator(); (i.hasNext() && (parsed_date == null));) {
+            for (Iterator<SimpleDateFormat> i = SUPPORTED_FORMATS.iterator(); (i.hasNext() && (parsed_date == null));) {
                 SimpleDateFormat next = i.next()
                 try {
                     parsed_date = next.parse(value)
