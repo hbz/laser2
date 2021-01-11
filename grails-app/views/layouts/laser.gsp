@@ -2,25 +2,18 @@
 <!doctype html>
 
 <laser:serviceInjection />
-
 <g:set var="currentServer" scope="page" />
 <g:set var="currentUser" scope="page" />
 <g:set var="currentLang" scope="page" />
 <g:set var="currentTheme" scope="page" />
-
 <g:set var="contextOrg" scope="page" />
 <g:set var="contextUser" scope="page" />
 <g:set var="contextMemberships" scope="page" />
-
 <g:set var="newTickets" scope="page" />
 <g:set var="myInstNewAffils" scope="page" />
-
 <tmpl:/layouts/initVars />
 
-<!--[if lt IE 7]> <html class="no-js lt-ie9 lt-ie8 lt-ie7" lang="${currentLang}"> <![endif]-->
-<!--[if IE 7]><html class="no-js lt-ie9 lt-ie8" lang="${currentLang}"> <![endif]-->
-<!--[if IE 8]><html class="no-js lt-ie9" lang="${currentLang}"> <![endif]-->
-<!--[if gt IE 8]><!--><html class="no-js" lang="${currentLang}"> <!--<![endif]-->
+<html lang="${currentLang}">
 
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -497,7 +490,7 @@
 
                                     <div class="divider"></div>
 
-                                    <semui:link generateElementId="true" class="item" role="menuitem" controller="profile" action="index">${message(code:'menu.user.profile')}</semui:link>
+                                    <semui:link generateElementId="true" class="item" role="menuitem" controller="profile" action="index">${message(code:'profile.user')}</semui:link>
                                     <semui:link generateElementId="true" class="item" role="menuitem" controller="profile" action="help">${message(code:'menu.user.help')}</semui:link>
                                     <semui:link generateElementId="true" class="item" role="menuitem" controller="profile" action="dsgvo">${message(code:'privacyNotice')}</semui:link>
 

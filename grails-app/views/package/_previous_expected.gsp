@@ -4,6 +4,7 @@
   <head>
     <meta name="layout" content="laser">
     <title>${message(code:'laser')} : ${message(code:'package.label')}</title>
+    <asset:stylesheet src="datatables.css"/><laser:javascript src="datatables.js"/>%{-- dont move --}%
   </head>
   <body>
 
@@ -41,7 +42,7 @@
             <g:render template="nav" contextPath="." />
 
                 <sec:ifAnyGranted roles="ROLE_ADMIN">
-                    <g:link class="ui button" controller="announcement" action="index" params='[at:"Package Link: ${pkg_link_str}",as:"RE: Package ${packageInstance.name}"]'>${message(code:'package.show.announcement', default:'Mention this package in an announcement')}</g:link>
+                    <g:link class="ui button" controller="announcement" action="index" params='[at:"Package Link: ${pkg_link_str}",as:"RE: Package ${packageInstance.name}"]'>${message(code:'package.show.announcement')}</g:link>
                 </sec:ifAnyGranted>
 
             <g:if test="${forum_url != null}">
@@ -78,7 +79,7 @@
 
       JSPC.app.confirmSubmit = function () {
         if ( $('#bulkOperationSelect').val() === 'remove' ) {
-          var agree=confirm("${message(code:'default.continue.confirm', default:'Are you sure you wish to continue?')}");
+          var agree=confirm("${message(code:'default.continue.confirm')}");
           if (agree)
             return true ;
           else

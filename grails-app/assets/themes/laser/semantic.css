@@ -1140,7 +1140,7 @@ aside.ui.accordion .title:not(.ui) {
 
 .editableform .control-group select,
 .editableform .control-group input {
-  width: auto!important;
+  width: 100% !important;
 }
 
 .editable-clear-x {
@@ -29902,6 +29902,10 @@ a.ui.card:hover,
 .ui.card > .content > a.header,
 .ui.cards > .card > .content > a.header {
   color: #275480;
+}
+
+.ui.card:last-child {
+  margin-bottom: 1em;
 }
 
 .la-sidekick .hidden + .ui.card {

@@ -23,9 +23,7 @@
         <g:render template="actions"/>
     </semui:controlButtons>
 
-    <br />
     <h1 class="ui icon header la-clear-before la-noMargin-top"><semui:headerIcon />${message(code: 'menu.institutions.manage_props')}</h1>
-
 
     <g:render template="nav" />
 
@@ -289,7 +287,7 @@
         minimumInputLength: 1,
 
         formatInputTooShort: function () {
-            return "${message(code:'select2.minChars.note', default:'Please enter 1 or more character')}";
+            return "${message(code:'select2.minChars.note')}";
         },
         formatNoMatches: function() {
             return "${message(code:'select2.noMatchesFound')}";
