@@ -24,11 +24,12 @@ import org.springframework.transaction.TransactionStatus
 class YodaService {
 
     def contextService = Holders.grailsApplication.mainContext.getBean('contextService')
+    ChangeNotificationService changeNotificationService = Holders.grailsApplication.mainContext.getBean('changeNotificationService')
     GlobalSourceSyncService globalSourceSyncService = Holders.grailsApplication.mainContext.getBean('globalSourceSyncService')
     DeletionService deletionService
     GokbService gokbService = Holders.grailsApplication.mainContext.getBean('gokbService')
-    ChangeNotificationService changeNotificationService = Holders.grailsApplication.mainContext.getBean('changeNotificationService')
     LinkGenerator grailsLinkGenerator = Holders.grailsApplication.mainContext.getBean(LinkGenerator)
+    GlobalService globalService
 
     boolean showDebugInfo() {
         //enhanced as of ERMS-829
@@ -340,7 +341,7 @@ class YodaService {
                         toDelete.addAll(TitleInstance.executeQuery('select ti from TitleInstance ti where ti.gokbId = :titleAKey and ti.tipps.size = 0',[titleAKey:entry.gokbId]))
                     }
                 }
-                globalSourceSyncService.cleanUpGorm()
+                globalService.cleanUpGorm()
                 if(toDelete) {
                     Identifier.executeUpdate('delete from Identifier id where id.ti in :toDelete',[toDelete:toDelete])
                     //TitleInstitutionProvider.executeUpdate('delete from TitleInstitutionProvider tip where tip.title in :toDelete',[toDelete:toDelete])
@@ -359,7 +360,7 @@ class YodaService {
     }
 
     Map<String,Object> listDeletedTIPPs() {
-        globalSourceSyncService.cleanUpGorm()
+        globalService.cleanUpGorm()
         //merge duplicate tipps
         List<String,Integer> duplicateTIPPRows = TitleInstancePackagePlatform.executeQuery('select tipp.gokbId,count(tipp.gokbId) from TitleInstancePackagePlatform tipp group by tipp.gokbId having count(tipp.gokbId) > 1')
         List<String> duplicateTIPPKeys = []
@@ -386,7 +387,7 @@ class YodaService {
             refdatas[tippStatus.value] = tippStatus
         }
         //get to deleted tipps
-        globalSourceSyncService.cleanUpGorm()
+        globalService.cleanUpGorm()
         println("move to TIPPs marked as deleted")
         //aim is to exclude resp. update those which has been erroneously marked as deleted (duplicate etc.)
         List<TitleInstancePackagePlatform> deletedTIPPs = TitleInstancePackagePlatform.findAllByStatus(RDStore.TIPP_STATUS_DELETED,[sort:'pkg.name',order:'asc'])
@@ -599,7 +600,7 @@ class YodaService {
             }
         }
         println("remapping done, purge now duplicate entries ...")
-        globalSourceSyncService.cleanUpGorm()
+        globalService.cleanUpGorm()
         List<List<String>> reportRows = []
         Map<RefdataValue,Set<String>> pendingChangeSetupMap = [:]
         Set<String> alreadyProcessed = []

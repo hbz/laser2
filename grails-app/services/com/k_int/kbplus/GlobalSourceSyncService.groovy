@@ -38,7 +38,6 @@ import groovyx.net.http.HTTPBuilder
 import groovyx.net.http.HttpResponseException
 import groovyx.net.http.Method
 import org.codehaus.groovy.runtime.typehandling.GroovyCastException
-import org.hibernate.SessionFactory
 import org.hibernate.Session
 import org.springframework.transaction.TransactionStatus
 
@@ -52,7 +51,6 @@ import java.util.concurrent.TimeUnit
 //@Transactional
 class GlobalSourceSyncService extends AbstractLockableService {
 
-    SessionFactory sessionFactory
     ExecutorService executorService
     ChangeNotificationService changeNotificationService
     def genericOIDService
@@ -222,7 +220,7 @@ class GlobalSourceSyncService extends AbstractLockableService {
                             if(listOAI.resumptionToken.size() > 0 && listOAI.resumptionToken.text().length() > 0) {
                                 resumption = listOAI.resumptionToken
                                 log.info("Continue with next iteration, token: ${resumption}")
-                                //cleanUpGorm()
+                                //globalService.cleanUpGorm()
                             }
                             else
                                 more = false
@@ -1931,17 +1929,4 @@ class GlobalSourceSyncService extends AbstractLockableService {
             orgStatus.put(rdv.value,rdv)
         }
     }
-
-    /**
-     * Flushes the session data to free up memory. Essential for bulk data operations like record syncing
-     */
-    void cleanUpGorm() {
-        log.debug("Clean up GORM")
-
-        Session session = sessionFactory.currentSession
-        session.flush()
-        session.clear()
-         //propertyInstanceMap.get().clear()
-    }
-
 }
