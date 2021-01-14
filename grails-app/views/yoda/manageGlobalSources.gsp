@@ -48,7 +48,7 @@
                               target="_blank">Link</g:link>
                   </g:if>
                   <g:elseif test="${source.type == "JSON"}">
-                      <g:link uri="${source.uri + '&changedSince=' + formatDate(format: "yyyy-MM-dd HH:mm:ss", date: source.haveUpTo)}"
+                      <g:link uri="${source.uri + '?changedSince=' + formatDate(format: "yyyy-MM-dd HH:mm:ss", date: source.haveUpTo)}"
                               target="_blank">Link</g:link>
                   </g:elseif>
               </td>

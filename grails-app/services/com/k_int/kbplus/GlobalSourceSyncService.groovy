@@ -90,23 +90,6 @@ class GlobalSourceSyncService extends AbstractLockableService {
     }
 
     /**
-     * A modified copy of startSync - triggering the multithreading variant.
-     * This is the entry point for triggering the sync workflow. To ensure locking, a flag will be set when a process is already running
-     * @return a flag whether a process is already running
-     */
-    boolean startMultithreadSync() {
-        if (!running) {
-            //doSync()
-            doMultithreadSync()
-            return true
-        }
-        else {
-            log.warn("Sync already running, not starting again")
-            return false
-        }
-    }
-
-    /**
      * The sync process wrapper. It takes every {@link GlobalRecordSource}, fetches the information since a given timestamp
      * and updates the local records
      */
@@ -274,104 +257,109 @@ class GlobalSourceSyncService extends AbstractLockableService {
                             int maxLoad = 1000, offset = 0
                             boolean more = true
                             while(more) {
-                                Map<String,Object> result = fetchRecordJSON(false,[componentType: componentType,changedSince:sdf.format(oldDate),max:maxLoad,offset:offset])
-                                List<Map> records = (List<Map>) result.records
-                                //continue here: translate the OAI methods into JSON processing
-                                //!!!! TitleInstance information will not be recorded separately in the ES-Mapping !!!!
-                                //!!!! providers are not on TIPP page !!!!
-                                Set<String> platformUUIDs = records.collect { Map tipp -> tipp.hostPlatformUuid } as Set<String>
-                                Set<String> packageUUIDs = records.collect { Map tipp -> tipp.tippPackageUuid } as Set<String>
-                                Set<String> tippUUIDs = records.collect { Map tipp -> tipp.uuid } as Set<String>
-                                Map<String,Package> packagesOnPage = [:]
-                                Map<String,Platform> platformsOnPage = [:]
-                                Map<String,TitleInstancePackagePlatform> tippsOnPage = [:]
-                                //collect existing TIPPs
-                                TitleInstancePackagePlatform.findAllByGokbIdInList(tippUUIDs.toList()).each { TitleInstancePackagePlatform tipp ->
-                                    tippsOnPage.put(tipp.gokbId,tipp)
-                                }
-                                //create or update packages
-                                packageUUIDs.each { String packageUUID ->
-                                    try {
-                                        packagesOnPage.put(packageUUID,createOrUpdatePackage(packageUUID))
+                                Map<String,Object> result = fetchRecordJSON(false,[component_type: componentType,changedSince:sdf.format(oldDate)])
+                                if(result.count > 0) {
+                                    List<Map> records = (List<Map>) result.records
+                                    //continue here: translate the OAI methods into JSON processing
+                                    //!!!! TitleInstance information will not be recorded separately in the ES-Mapping !!!!
+                                    //!!!! providers are not on TIPP page !!!!
+                                    Set<String> platformUUIDs = records.collect { Map tipp -> tipp.hostPlatformUuid } as Set<String>
+                                    Set<String> packageUUIDs = records.collect { Map tipp -> tipp.tippPackageUuid } as Set<String>
+                                    Set<String> tippUUIDs = records.collect { Map tipp -> tipp.uuid } as Set<String>
+                                    Map<String,Package> packagesOnPage = [:]
+                                    Map<String,Platform> platformsOnPage = [:]
+                                    Map<String,TitleInstancePackagePlatform> tippsOnPage = [:]
+                                    //collect existing TIPPs
+                                    TitleInstancePackagePlatform.findAllByGokbIdInList(tippUUIDs.toList()).each { TitleInstancePackagePlatform tipp ->
+                                        tippsOnPage.put(tipp.gokbId,tipp)
                                     }
-                                    catch (SyncException e) {
-                                        log.error("Error on updating package ${packageUUID}: ",e)
-                                        SystemEvent.createEvent("GSSS_JSON_WARNING",[packageRecordKey:packageUUID])
+                                    //create or update packages
+                                    packageUUIDs.each { String packageUUID ->
+                                        try {
+                                            packagesOnPage.put(packageUUID,createOrUpdatePackage(packageUUID))
+                                        }
+                                        catch (SyncException e) {
+                                            log.error("Error on updating package ${packageUUID}: ",e)
+                                            SystemEvent.createEvent("GSSS_JSON_WARNING",[packageRecordKey:packageUUID])
+                                        }
                                     }
-                                }
-                                //create or update platforms
-                                platformUUIDs.each { String platformUUID ->
-                                    try {
-                                        platformsOnPage.put(platformUUID,createOrUpdatePlatformJSON(platformUUID))
+                                    //create or update platforms
+                                    platformUUIDs.each { String platformUUID ->
+                                        try {
+                                            platformsOnPage.put(platformUUID,createOrUpdatePlatformJSON(platformUUID))
+                                        }
+                                        catch (SyncException e) {
+                                            log.error("Error on updating platform ${platformUUID}: ",e)
+                                            SystemEvent.createEvent("GSSS_JSON_WARNING",[platformRecordKey:platformUUID])
+                                        }
                                     }
-                                    catch (SyncException e) {
-                                        log.error("Error on updating platform ${platformUUID}: ",e)
-                                        SystemEvent.createEvent("GSSS_JSON_WARNING",[platformRecordKey:platformUUID])
-                                    }
-                                }
-                                records.eachWithIndex { Map tipp, int idx ->
-                                    log.debug("now processing entry #${offset+idx}")
-                                    try {
-                                        Map<String,Object> updatedTIPP = [
-                                            /*title: [
-                                                    gokbId: tipp.title.'@uuid'.text()
-                                            ],*/
-                                            packageUUID: tipp.tippPackageUuid ?: null,
-                                            platformUUID: tipp.tippPlatformUuid ?: null,
-                                            status: tipp.status,
-                                            coverages: [],
-                                            hostPlatformURL: tipp.url ?: null,
-                                            identifiers: [],
-                                            //id: tipp.'@id'.text(),
-                                            uuid: tipp.uuid,
-                                            //accessStartDate : tipp.access.'@start'.text() ? DateUtils.parseDateGeneric(tipp.access.'@start'.text()) : null,
-                                            //accessEndDate   : tipp.access.'@end'.text() ? DateUtils.parseDateGeneric(tipp.access.'@end'.text()) : null,
-                                            //medium      : tipp.medium.text()
-                                        ]
-                                        if(tipp.titleType == 'JournalInstance') {
-                                            tipp.coverage.each { cov ->
-                                                updatedTIPP.coverages << [
-                                                        startDate: cov.startDate ? DateUtils.parseDateGeneric(cov.startDate) : null,
-                                                        endDate: cov.endDate ? DateUtils.parseDateGeneric(cov.endDate) : null,
-                                                        startVolume: cov.startVolume ?: null,
-                                                        endVolume: cov.endVolume ?: null,
-                                                        startIssue: cov.startIssue ?: null,
-                                                        endIssue: cov.endIssue ?: null,
-                                                        coverageDepth: cov.coverageDepth ?: null,
-                                                        coverageNote: cov.coverageNote ?: null,
-                                                        embargo: cov.embargo ?: null
-                                                ]
+                                    records.eachWithIndex { Map tipp, int idx ->
+                                        log.debug("now processing entry #${offset+idx}")
+                                        try {
+                                            Map<String,Object> updatedTIPP = [
+                                                    /*title: [
+                                                            gokbId: tipp.title.'@uuid'.text()
+                                                    ],*/
+                                                    packageUUID: tipp.tippPackageUuid ?: null,
+                                                    platformUUID: tipp.tippPlatformUuid ?: null,
+                                                    status: tipp.status,
+                                                    coverages: [],
+                                                    hostPlatformURL: tipp.url ?: null,
+                                                    identifiers: [],
+                                                    //id: tipp.'@id'.text(),
+                                                    uuid: tipp.uuid,
+                                                    //accessStartDate : tipp.access.'@start'.text() ? DateUtils.parseDateGeneric(tipp.access.'@start'.text()) : null,
+                                                    //accessEndDate   : tipp.access.'@end'.text() ? DateUtils.parseDateGeneric(tipp.access.'@end'.text()) : null,
+                                                    //medium      : tipp.medium.text()
+                                            ]
+                                            if(tipp.titleType == 'JournalInstance') {
+                                                tipp.coverage.each { cov ->
+                                                    updatedTIPP.coverages << [
+                                                            startDate: cov.startDate ? DateUtils.parseDateGeneric(cov.startDate) : null,
+                                                            endDate: cov.endDate ? DateUtils.parseDateGeneric(cov.endDate) : null,
+                                                            startVolume: cov.startVolume ?: null,
+                                                            endVolume: cov.endVolume ?: null,
+                                                            startIssue: cov.startIssue ?: null,
+                                                            endIssue: cov.endIssue ?: null,
+                                                            coverageDepth: cov.coverageDepth ?: null,
+                                                            coverageNote: cov.coverageNote ?: null,
+                                                            embargo: cov.embargo ?: null
+                                                    ]
+                                                }
+                                                updatedTIPP.coverages = updatedTIPP.coverages.toSorted { a, b -> a.startDate <=> b.startDate }
                                             }
-                                            updatedTIPP.coverages = updatedTIPP.coverages.toSorted { a, b -> a.startDate <=> b.startDate }
+                                            Map<String,Object> diffs = createOrUpdateTIPP(tippsOnPage.get(updatedTIPP.uuid),updatedTIPP,packagesOnPage,platformsOnPage)
+                                            List<Map<String,Object>> diffsOfPackage = packagesToNotify.get(updatedTIPP.packageUUID)
+                                            if(!diffsOfPackage)
+                                                diffsOfPackage = []
+                                            diffsOfPackage << diffs
+                                            if(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
+                                                diffsOfPackage.addAll(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
+                                            packagesToNotify.put(updatedTIPP.packageUUID,diffsOfPackage)
+                                            Date lastUpdatedTime = sdf.parse(tipp.lastUpdatedDisplay)
+                                            if(lastUpdatedTime.getTime() > maxTimestamp) {
+                                                maxTimestamp = lastUpdatedTime.getTime()
+                                            }
                                         }
-                                        Map<String,Object> diffs = createOrUpdateTIPP(tippsOnPage.get(updatedTIPP.uuid),updatedTIPP,packagesOnPage,platformsOnPage)
-                                        List<Map<String,Object>> diffsOfPackage = packagesToNotify.get(updatedTIPP.packageUUID)
-                                        if(!diffsOfPackage)
-                                            diffsOfPackage = []
-                                        diffsOfPackage << diffs
-                                        if(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
-                                            diffsOfPackage.addAll(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
-                                        packagesToNotify.put(updatedTIPP.packageUUID,diffsOfPackage)
-                                        Date lastUpdatedTime = sdf.parse(tipp.lastUpdatedDisplay)
-                                        if(lastUpdatedTime.getTime() > maxTimestamp) {
-                                            maxTimestamp = lastUpdatedTime.getTime()
+                                        catch (SyncException e) {
+                                            log.error("Error on updating tipp ${tipp.uuid}: ",e)
+                                            SystemEvent.createEvent("GSSS_JSON_WARNING",[tippRecordKey:tipp.uuid])
                                         }
                                     }
-                                    catch (SyncException e) {
-                                        log.error("Error on updating tipp ${tipp.uuid}: ",e)
-                                        SystemEvent.createEvent("GSSS_JSON_WARNING",[tippRecordKey:tipp.uuid])
+                                    if(result.hasMoreRecords) {
+                                        result = fetchRecordJSON(false,[component_type: componentType,changedSince:sdf.format(oldDate),scrollId:result.scrollId])
                                     }
-                                }
-                                if((offset+maxLoad < (int) result.count) && (offset+maxLoad <= 10000)) { //the second clause is only provisoric until GOKb tickets ##379 and/or 380 are fixed
-                                    offset += maxLoad
+                                    else {
+                                        more = false
+                                    }
                                 }
                                 else {
                                     more = false
+                                    log.info("no records updated - leaving everything as is ...")
                                 }
                             }
                             break
                     }
-
                     if(maxTimestamp+10000 > source.haveUpTo.getTime()) {
                         log.debug("old ${sdf.format(source.haveUpTo)}")
                         source.haveUpTo = new Date(maxTimestamp + 10000)
@@ -384,7 +372,7 @@ class GlobalSourceSyncService extends AbstractLockableService {
                         changeNotificationService.notifyLinkedSubscriptions(packagesToNotify)
                     }
                     else {
-                        log.info("no diffs recorded ...?")
+                        log.info("no diffs recorded ...")
                     }
                     log.info("sync job finished")
                     SystemEvent.createEvent('GSSS_JSON_COMPLETE',['jobId',source.id])
@@ -396,198 +384,6 @@ class GlobalSourceSyncService extends AbstractLockableService {
             }
         }
         running = false
-    }
-
-    void doMultithreadSync() {
-        running = true
-        defineMapFields()
-        List<GlobalRecordSource> jobs = GlobalRecordSource.findAllByActive(true)
-        jobs.each { GlobalRecordSource source ->
-            this.source = source
-            try {
-                SystemEvent.createEvent('GSSS_OAI_START',['jobId':source.id])
-                Thread.currentThread().setName("principal thread")
-                Date oldDate = source.haveUpTo
-                Map<String,String> queryParams = [verb:'ListRecords']
-                String fromParam = oldDate ? xmlTimestampFormat.format(oldDate) : ''
-                log.info("getting first record for job #${source.id} with uri ${source.uri} since ${oldDate} using ${source.fullPrefix}, timestamp: ${fromParam} ...")
-                queryParams.metadataPrefix = source.fullPrefix
-                queryParams.from = fromParam
-                GPathResult listOAI = fetchRecordOAI(RECTYPES[source.rectype],queryParams)
-                if(listOAI.resumptionToken.size() > 0 && listOAI.resumptionToken.text().length() > 0) {
-                    int completeListSize = Integer.parseInt(listOAI.resumptionToken.'@completeListSize'.text())
-                    log.info("Total number of records: ${completeListSize}")
-                    Set<Set<String>> threads = divideWork(listOAI.resumptionToken.text(),completeListSize)
-                    threads.eachWithIndex { Set<String> tokens, int threadN ->
-                        executorService.execute ({
-                            startThread(listOAI,tokens,threadN)
-                            if(maxTimestamp+1000 > oldDate.time) {
-                                log.info("all OAI info fetched, timestamp ${source.haveUpTo} updated to ${DateUtils.getSDF_NoTime().format(new Date(maxTimestamp+1000))}")
-                                source.haveUpTo = new Date(maxTimestamp+1000)
-                            }
-                        })
-                    }
-                    executorService.shutdown()
-                    try {
-                        executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS)
-                        log.info("after last thread, timestamp is at ${source.haveUpTo}")
-                        source.save()
-                    }
-                    catch (InterruptedException e) {
-                        throw new SyncException(e.getMessage())
-                    }
-                }
-            }
-            catch (Exception e) {
-                SystemEvent.createEvent('GSSS_OAI_ERROR',['jobId':source.id])
-                log.error("sync job has failed, please consult stacktrace as follows: ",e)
-            }
-        }
-        running = false
-    }
-
-    Set<Set<String>> divideWork(String baseToken, int completeListSize) {
-        Set<Set<String>> threadSet = []
-        Set<String> tokenSet = [baseToken] //i = 10
-        for(int i = 20;i < completeListSize;i+=10) {
-            tokenSet << baseToken.replaceFirst('\\|(\\d+)\\|',"|${i}|")
-            if(i % 2000 == 0) {
-                log.debug("new thread opened")
-                threadSet << tokenSet
-                tokenSet = []
-            }
-        }
-        threadSet
-    }
-
-    void startThread(GPathResult listOAI, Set<String> tokens, int threadN) {
-        Thread.currentThread().setName("parallelSync ${threadN}")
-        try {
-            Map<String,String> queryParams = [verb:'ListRecords']
-            List<List<Map<String,Object>>> tippsToNotify = []
-            if(threadN == 0) {
-                log.debug(listOAI.toString())
-                tippsToNotify.addAll(syncRecords(listOAI,0))
-            }
-            tokens.each { String token ->
-                log.info("in loop, making request with link ${source.uri}?verb=ListRecords&metadataPrefix=${source.fullPrefix}&resumptionToken=${token} ...")
-                queryParams.resumptionToken = token
-                listOAI = fetchRecordOAI(RECTYPES[source.rectype],queryParams)
-                if(listOAI) {
-                    tippsToNotify.addAll(syncRecords(listOAI, threadN))
-                    log.info("Continue with next iteration, token: ${token}")
-                }
-            }
-            notifyDependencies(tippsToNotify)
-            log.info("thread ${threadN} finished")
-        }
-        catch (Exception e) {
-            SystemEvent.createEvent('GSSS_OAI_ERROR',['jobId':source.id])
-            log.error("sync job has failed, please consult stacktrace as follows: ",e)
-        }
-    }
-
-    List syncRecords(GPathResult listOAI,int threadN) {
-        List<List<Map<String,Object>>> tippsToNotify = []
-        boolean dryRun = false //is for debugging
-        Set<String> tippUUIDsOnPage = [], platformsOnPage = [], titleInstancesOnPage = [], packageUUIDs = listOAI.'**'.findAll { node ->
-            node.name() == "package"
-        }.collect { node -> node.'@uuid'.text() }.toSet()
-        Map<String,Map<String,Object>> tippNodesOnPage = [:]
-        if(packageUUIDs) {
-            Set<Package> packagesExisting = Package.findAllByGokbIdInList(packageUUIDs.toList())
-            Map<String,Object> updateMap = collectDataToUpdate(listOAI,packagesExisting)
-            //make package check: which ones do exist in LAS:eR at all, which do not?
-            if(!dryRun) {
-                //log.warn("do it ...")
-                updateTitleInstances(updateMap.titleInstancesOnPage)
-                updateProviders(updateMap.providersOnPage)
-                updatePlatforms(updateMap.platformsOnPage)
-                updateMap.tippsOnPage.each { tippNode ->
-                    tippUUIDsOnPage << tippNode.'@uuid'.text()
-                    tippNodesOnPage.put(tippNode.'@uuid'.text(),tippConv(tippNode))
-                }
-                updateMap.platformsOnPage.each { platformNode ->
-                    platformsOnPage << platformNode.'@uuid'.text()
-                }
-                updateMap.titleInstancesOnPage.each { titleInstanceNode ->
-                    titleInstancesOnPage << titleInstanceNode.'@uuid'.text()
-                }
-                log.info("fetching objects for keys ...")
-                Map<String,Platform> newPlatforms = [:]
-                if(platformsOnPage) {
-                    Platform.findAllByGokbIdInList(platformsOnPage.toList()).each { Platform plat ->
-                        newPlatforms.put(plat.gokbId,plat)
-                    }
-                }
-                Map<String,TitleInstance> newTitleInstances = [:]
-                if(titleInstancesOnPage) {
-                    //may cause crashes when processing 5 000 000 entries
-                    TitleInstance.findAllByGokbIdInList(titleInstancesOnPage.toList()).each { TitleInstance ti ->
-                        newTitleInstances.put(ti.gokbId,ti)
-                    }
-                }
-                //process existing ones
-                if(tippUUIDsOnPage) {
-                    Set<TitleInstancePackagePlatform> existingTIPPs = TitleInstancePackagePlatform.findAllByGokbIdInList(tippUUIDsOnPage.toList())
-                    tippsToNotify.addAll(processTippPage(existingTIPPs,tippNodesOnPage,packagesExisting,newPlatforms,newTitleInstances))
-                }
-                else if(!tippUUIDsOnPage) {
-                    log.info("no tipp UUIDs on page???")
-                }
-                //add new ones
-                packageUUIDs.each { String uuid ->
-                    Package pkgExisting = packagesExisting.find { Package pkg -> pkg.gokbId == uuid }
-                    if(pkgExisting)
-                        log.debug("existing: ${uuid} with LAS:eR ID ${pkgExisting.id}")
-                    else if(!newPackages.contains(uuid)) {
-                        log.debug("existing: ${uuid} not existing, need to load")
-                        //filter here all TIPP-UUIDs and jump to next unprocessed entry
-                        GPathResult packageRecord = fetchRecordOAI('packages',[verb:'GetRecord',identifier:uuid])
-                        packageRecord.record.metadata.gokb.package.TIPPs.TIPP.each { tippNode ->
-                            newTIPPs.add(tippNode.'@uuid'.text()) //must be COMMON for each thread!
-                        }
-                        updateNonPackageData(packageRecord)
-                        createOrUpdatePackageOAI(packageRecord.record.metadata.gokb.package)
-                        newPackages << uuid
-                    }
-                    else log.info("package ${uuid} already in process by another thread, no double loading ...")
-                }
-            }
-            else {
-                log.debug("thread ${threadN} has package UUIDs located: ${packageUUIDs}")
-                packageUUIDs.each { String uuid ->
-                    Package pkgExisting = packagesExisting.find { Package pkg -> pkg.gokbId == uuid }
-                    if(pkgExisting)
-                        log.debug("existing: ${uuid} with LAS:eR ID ${pkgExisting.id}")
-                    else if(!newPackages.contains(uuid)) {
-                        log.debug("existing: ${uuid} not existing, need to load")
-                        GPathResult packageRecord = fetchRecordOAI('packages',[verb:'GetRecord', identifier:uuid])
-                        packageRecord.record.metadata.gokb.package.TIPPs.TIPP.each { tippNode ->
-                            newTIPPs.add(tippNode.'@uuid'.text()) //must be COMMON for each thread!
-                        }
-                        newPackages << uuid
-                    }
-                }
-                listOAI.record.each { r ->
-                    NodeChildren tippNode = r.metadata.gokb.tipp
-                    if(packagesExisting.find{ Package pkg -> pkg.gokbId == tippNode.package.'@uuid'.text() }) {
-                        if(!newTIPPs.contains(tippNode.'@uuid'.text())) {
-                            tippUUIDsOnPage << tippNode.'@uuid'.text()
-                            platformsOnPage << tippNode.platform.'@uuid'.text()
-                            titleInstancesOnPage << tippNode.title.'@uuid'.text()
-                        }
-                        else {
-                            log.debug("omit TIPP ${tippNode.'@uuid'.text()}, already processed when adding its package")
-                        }
-                    }
-                }
-                log.debug("located TIPPs to update: ${tippUUIDsOnPage.toListString()}")
-                log.debug("located platforms to update: ${platformsOnPage.toListString()}")
-                log.debug("located titles to update: ${titleInstancesOnPage.toListString()}")
-            }
-        }
-        tippsToNotify
     }
 
     Map<String,Object> collectDataToUpdate(GPathResult listOAI, Set<Package> packagesExisting) {
@@ -1927,7 +1723,7 @@ class GlobalSourceSyncService extends AbstractLockableService {
         //By then, I should query the "normal" endpoint /gokb/api/find?
         HTTPBuilder http
         if(singleObject)
-            http = new HTTPBuilder(apiSource.baseUrl+apiSource.fixToken+'/find')
+            http = new HTTPBuilder(apiSource.baseUrl+apiSource.fixToken+'/scroll')
         else http = new HTTPBuilder(source.uri)
         Map<String,Object> result = [:]
         http.request(Method.POST, ContentType.JSON) { req ->
@@ -1936,7 +1732,9 @@ class GlobalSourceSyncService extends AbstractLockableService {
             response.success = { resp, json ->
                 if(resp.status == 200) {
                     result.records = json.records
-                    result.count = json.count
+                    result.count = json.size
+                    result.scrollId = json.scrollId
+                    result.hasMoreRecords = json.hasMoreRecords
                 }
                 else {
                     throw new SyncException("erroneous response")
