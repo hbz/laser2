@@ -1,5 +1,6 @@
 package com.k_int.kbplus
 
+import de.laser.TitleInstancePackagePlatform
 import de.laser.auth.User
 import de.laser.AuditConfig
 import de.laser.ChangeNotificationQueueItem
@@ -18,6 +19,7 @@ import de.laser.interfaces.AbstractLockableService
 import grails.converters.JSON
 import grails.gorm.transactions.Transactional
 import org.grails.web.json.JSONElement
+import org.hibernate.Session
 
 import java.sql.Timestamp
 import java.util.concurrent.ExecutorService
@@ -29,9 +31,15 @@ class ChangeNotificationService extends AbstractLockableService {
     def genericOIDService
     def globalService
     ContextService contextService
+    Map<String,Integer> initialPackagesCounter
+    Set<SubscriptionPackage> subscribersWithConfig
 
     // N,B, This is critical for this service as it's called from domain object OnChange handlers
     static transactional = false
+
+    void setInitialPackagesCounter(Map<String,Integer> initialPackagesCounter) {
+        this.initialPackagesCounter = initialPackagesCounter
+    }
 
   void broadcastEvent(String contextObjectOID, changeDetailDocument) {
     // log.debug("broadcastEvent(${contextObjectOID},${changeDetailDocument})");
@@ -319,6 +327,15 @@ class ChangeNotificationService extends AbstractLockableService {
         }
     }
 
+    /**
+     * This method determines for the given arguments, message token and subscription package how to notify its owner.
+     * It works only with the legacy OAI sync logic and should be marked as deprecated but is kept as long as the new infrastructure is properly set up
+     * @param args
+     * @param msgToken
+     * @param subscriptionPackage
+     * @return
+     */
+    @Deprecated
     @Transactional
     def determinePendingChangeBehavior(Map<String,Object> args, String msgToken, SubscriptionPackage subscriptionPackage) {
         /*
@@ -391,6 +408,126 @@ class ChangeNotificationService extends AbstractLockableService {
                 pc.accept()
             }
         }
+    }
+
+    /**
+     * This is the change notification processor for the JSON-based (i.e. new) sync logic
+     * @param packagesToNotify
+     */
+    void notifyLinkedSubscriptions(Map<String,List<Map<String,Object>>> packagesToNotify) {
+        de.laser.Package.withSession { Session sess ->
+            subscribersWithConfig = SubscriptionPackage.executeQuery('select sp from PendingChangeConfiguration pcc join pcc.subscriptionPackage sp where sp.pkg.gokbId in (:gokbIds) and sp.subscription.instanceOf = null',[gokbIds:packagesToNotify.keySet()])
+            //loop through all packages
+            packagesToNotify.each { String packageUUID, List<Map<String,Object>> diffsOfPackage ->
+                Map<String,Object> tippCountDiff = [:]
+                if(diffsOfPackage.find { Map<String,Object> diff -> diff.event in [PendingChangeConfiguration.NEW_TITLE,PendingChangeConfiguration.TITLE_DELETED] }) {
+                    int newCount = TitleInstancePackagePlatform.executeQuery('select count(tipp.id) from TitleInstancePackagePlatform tipp where tipp.pkg.gokbId = :gokbId',[gokbId:packageUUID])[0]
+                    tippCountDiff.event = "tippCountAffected"
+                    tippCountDiff.newValue = newCount
+                    tippCountDiff.oldValue = initialPackagesCounter.get(packageUUID)
+                }
+                //get all top-level subscriptions (i.e. subscription.instanceOf = null) resp. their pending change configuration maps for lookup
+                Set<SubscriptionPackage> allSubscribersOfPackage = SubscriptionPackage.executeQuery('select sp from SubscriptionPackage sp where sp.pkg.gokbId = :gokbId',[gokbId:packageUUID])
+                //process diff, one by one
+                diffsOfPackage.each { Map<String,Object> diff ->
+                    allSubscribersOfPackage.each { SubscriptionPackage subscriber ->
+                        checkNotificationConfiguration(subscriber,diff)
+                    }
+                }
+                if(tippCountDiff) {
+                    allSubscribersOfPackage.each { SubscriptionPackage subscriber ->
+                        checkNotificationConfiguration(subscriber,tippCountDiff)
+                    }
+                }
+                sess.flush()
+            }
+        }
+    }
+
+    void checkNotificationConfiguration(SubscriptionPackage subscriber, Map<String,Object> diff) {
+        /*
+        decision tree:
+            is there a pending change configuration for the given package?
+            - yes: process
+            - no: use fallback - prompt
+         */
+        SubscriptionPackage sp = subscribersWithConfig.find { SubscriptionPackage row -> row.id == subscriber.id }
+        if(sp) {
+            //config exists for subscriber
+            String msgToken
+            switch(diff.event) {
+                case "add": msgToken = PendingChangeConfiguration.NEW_TITLE
+                    break
+                case "delete": msgToken = PendingChangeConfiguration.TITLE_DELETED
+                    break
+                case "update":
+                    if(diff.prop == "coverage") {
+                        //covEntry again ... the city Coventry is still beautiful ... but here is the COVerageENTRY meant.
+                        diff.covDiffs.each {covEntry ->
+                            switch(covEntry.event) {
+                                case "update": msgToken = PendingChangeConfiguration.COVERAGE_UPDATED
+                                    break
+                                case "add": msgToken = PendingChangeConfiguration.NEW_COVERAGE
+                                    break
+                                case "delete": msgToken = PendingChangeConfiguration.COVERAGE_DELETED
+                                    break
+                                default: msgToken = null
+                                    break
+                            }
+                            if(msgToken)
+                                createNotificationIfNecessary(sp,covEntry,msgToken)
+                        }
+                    }
+                    else msgToken = PendingChangeConfiguration.TITLE_UPDATED
+                    break
+                case "pkgPropUpdate": msgToken = PendingChangeConfiguration.PACKAGE_PROP
+                    break
+                case "tippCountAffected": msgToken = PendingChangeConfiguration.PACKAGE_TIPP_COUNT_CHANGED
+                    break
+                case "pkgDelete": msgToken = PendingChangeConfiguration.PACKAGE_DELETED
+                    break
+            }
+            if(msgToken && diff.prop != "coverage") {
+                createNotificationIfNecessary(sp,diff,msgToken)
+            }
+            else {
+                log.warn("unhandled event type: ${diff.event}")
+            }
+        }
+    }
+
+    void createNotificationIfNecessary(SubscriptionPackage sp, Map<String,Object> diff, String msgToken) {
+        if(msgToken == PendingChangeConfiguration.PACKAGE_TIPP_COUNT_CHANGED) {
+            PendingChangeConfiguration onNewTipp = sp.pendingChangeConfig.find { PendingChangeConfiguration subRow -> subRow.settingKey == PendingChangeConfiguration.NEW_TITLE }
+            PendingChangeConfiguration onDeletedTipp = sp.pendingChangeConfig.find { PendingChangeConfiguration subRow -> subRow.settingKey == PendingChangeConfiguration.TITLE_DELETED }
+            if(onNewTipp.settingValue != RDStore.PENDING_CHANGE_CONFIG_REJECT && onDeletedTipp.settingValue != RDStore.PENDING_CHANGE_CONFIG_REJECT) {
+                //set up notification on dashboard
+            }
+        }
+        else {
+            PendingChangeConfiguration pcc = sp.pendingChangeConfig.find { PendingChangeConfiguration subRow -> subRow.settingKey == msgToken }
+            RefdataValue settingValue = RDStore.PENDING_CHANGE_CONFIG_PROMPT
+            if(pcc)
+                settingValue = pcc.settingValue
+            switch(settingValue) {
+                case RDStore.PENDING_CHANGE_CONFIG_ACCEPT:
+                    //set up notification on dashboard and push diff processing to issue entitlement
+                    //I need to perform the change on the issue entitlement which reflects the TIPP, then, a message which notifies about the change
+                    /* There should come a new status History for Pending Changes; this supersedes the old status.
+                    This aims the TIPP level. When accepting a pending change, the equivalent data for the subscriber should be retrieved.
+                    There should be an on-the-fly check of diffs between the holding and the base package.
+                    Check each history event which has not been marked as superseded if it has been applied.
+                    If there is a diff, the change should be marked as open, otherwise display as that happened.
+                    Changes should be grouped by TIPPs. */
+                    break
+                case RDStore.PENDING_CHANGE_CONFIG_PROMPT:
+                    //set up notification on dashboard only
+                    //I need the target subscription, the package and the change to record, no object for each difference!
+                    break
+            //else do nothing
+            }
+        }
+
     }
 
 }

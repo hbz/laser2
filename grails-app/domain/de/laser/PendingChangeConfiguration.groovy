@@ -15,6 +15,7 @@ class PendingChangeConfiguration {
     static final String COVERAGE_DELETED = "pendingChange.message_TC03"
     static final String PACKAGE_PROP = "pendingChange.message_PK01"
     static final String PACKAGE_DELETED = "pendingChange.message_PK02"
+    static final String PACKAGE_TIPP_COUNT_CHANGED = "pendingChange.message_PK03" //its display depends on NEW_TITLE and TITLE_DELETED settings
     static final String BILLING_SUM_UPDATED = "pendingChange.message_CI01"
     static final String LOCAL_SUM_UPDATED = "pendingChange.message_CI02"
     static final Set<String> SETTING_KEYS = [NEW_TITLE, TITLE_UPDATED, TITLE_DELETED, NEW_COVERAGE, COVERAGE_UPDATED, COVERAGE_DELETED, PACKAGE_PROP, PACKAGE_DELETED]

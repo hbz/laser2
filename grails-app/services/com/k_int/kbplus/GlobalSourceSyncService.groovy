@@ -66,6 +66,8 @@ class GlobalSourceSyncService extends AbstractLockableService {
     Map<String, RefdataValue> titleStatus = [:], titleMedium = [:], tippStatus = [:], packageStatus = [:], orgStatus = [:]
     Set<String> newPackages = [], newTIPPs = []
     Long maxTimestamp = 0
+    Map<String,Integer> initialPackagesCounter = [:]
+    Map<String,Set<Map<String,Object>>> pkgPropDiffsContainer = [:]
 
     SimpleDateFormat xmlTimestampFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
@@ -254,6 +256,17 @@ class GlobalSourceSyncService extends AbstractLockableService {
                     log.info("getting records from job #${source.id} with uri ${source.uri} since ${oldDate}")
                     SimpleDateFormat sdf = new SimpleDateFormat('yyyy-MM-dd HH:mm:ss')
                     String componentType
+                    Map<String,List<Map<String,Object>>> packagesToNotify = [:]
+                    /*
+                        structure:
+                        { packageUUID: [
+                            diffs of tipp 1 concerned,
+                            diffs of tipp 2 concerned,
+                            ...
+                            diffs of tipp n concerned
+                            ]
+                        }
+                     */
                     switch(source.rectype) {
                         case RECTYPE_PACKAGE: componentType = 'Package'
                             break
@@ -331,7 +344,18 @@ class GlobalSourceSyncService extends AbstractLockableService {
                                             }
                                             updatedTIPP.coverages = updatedTIPP.coverages.toSorted { a, b -> a.startDate <=> b.startDate }
                                         }
-                                        createOrUpdateTIPP(updatedTIPP,packagesOnPage,platformsOnPage,tippsOnPage)
+                                        Map<String,Object> diffs = createOrUpdateTIPP(tippsOnPage.get(updatedTIPP.uuid),updatedTIPP,packagesOnPage,platformsOnPage)
+                                        List<Map<String,Object>> diffsOfPackage = packagesToNotify.get(updatedTIPP.packageUUID)
+                                        if(!diffsOfPackage)
+                                            diffsOfPackage = []
+                                        diffsOfPackage << diffs
+                                        if(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
+                                            diffsOfPackage.addAll(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
+                                        packagesToNotify.put(updatedTIPP.packageUUID,diffsOfPackage)
+                                        Date lastUpdatedTime = sdf.parse(tipp.lastUpdatedDisplay)
+                                        if(lastUpdatedTime.getTime() > maxTimestamp) {
+                                            maxTimestamp = lastUpdatedTime.getTime()
+                                        }
                                     }
                                     catch (SyncException e) {
                                         log.error("Error on updating tipp ${tipp.uuid}: ",e)
@@ -347,8 +371,23 @@ class GlobalSourceSyncService extends AbstractLockableService {
                             }
                             break
                     }
+
+                    if(maxTimestamp+10000 > source.haveUpTo.getTime()) {
+                        log.debug("old ${sdf.format(source.haveUpTo)}")
+                        source.haveUpTo = new Date(maxTimestamp + 10000)
+                        log.debug("new ${sdf.format(source.haveUpTo)}")
+                        source.save()
+                    }
+                    if(packagesToNotify.keySet().size() > 0) {
+                        log.info("notifying subscriptions ...")
+                        changeNotificationSerivce.setInitialPackagesCounter(initialPackagesCounter)
+                        changeNotificationService.notifyLinkedSubscriptions(packagesToNotify)
+                    }
+                    else {
+                        log.info("no diffs recorded ...?")
+                    }
                     log.info("sync job finished")
-                    SystemEvent.createEvent('GSSS_OAI_COMPLETE',['jobId',source.id])
+                    SystemEvent.createEvent('GSSS_JSON_COMPLETE',['jobId',source.id])
                 }
                 catch (Exception e) {
                     SystemEvent.createEvent('GSSS_JSON_ERROR',['jobId':source.id])
@@ -596,19 +635,21 @@ class GlobalSourceSyncService extends AbstractLockableService {
         result
     }
 
-    void createOrUpdateTIPP(Map tippB, Map<String,Package> newPackages,Map<String,Platform> newPlatforms,Map<String,TitleInstancePackagePlatform> existingTIPPs) {
+    Map<String,Object> createOrUpdateTIPP(TitleInstancePackagePlatform tippA,Map tippB, Map<String,Package> newPackages,Map<String,Platform> newPlatforms) {
+        Map<String,Object> result = [:]
         TitleInstancePackagePlatform.withSession { Session sess ->
-            TitleInstancePackagePlatform tippA = existingTIPPs.get(tippB.uuid)
             if(tippA) {
                 //update or delete TIPP
-                processTippDiffs(tippA,tippB) //maybe I have to make some adaptations on tippB!
+                result.putAll(processTippDiffs(tippA,tippB)) //maybe I have to make some adaptations on tippB!
             }
             else {
                 //new TIPP
                 TitleInstancePackagePlatform target = addNewTIPP(newPackages.get(tippB.packageUuid), tippB, newPlatforms, null)
-                //tippsToNotify << [event: 'add', target: target]
+                result.event = 'add'
+                result.target = target
             }
         }
+        result
     }
 
     void updateNonPackageData(GPathResult oaiBranch) throws SyncException {
@@ -909,7 +950,9 @@ class GlobalSourceSyncService extends AbstractLockableService {
                         if(packageRecord.providerUuid) {
                             newPackageProps.contentProvider = Org.findByGokbId(packageRecord.providerUuid)
                         }
-                        Set<Map<String, Object>> pkgPropDiffs = getPkgPropDiff(result, newPackageProps) //notifications!
+                        pkgPropDiffsContainer.put(packageUUID,getPkgPropDiff(result, newPackageProps))
+                        if(!initialPackagesCounter.get(packageUUID))
+                            initialPackagesCounter.put(packageUUID,result.tipps.size())
                     }
                 }
                 else {
