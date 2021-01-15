@@ -239,7 +239,7 @@ class GlobalSourceSyncService extends AbstractLockableService {
                     log.info("getting records from job #${source.id} with uri ${source.uri} since ${oldDate}")
                     SimpleDateFormat sdf = new SimpleDateFormat('yyyy-MM-dd HH:mm:ss')
                     String componentType
-                    Map<String,List<Map<String,Object>>> packagesToNotify = [:]
+                    Map<String,Set<Map<String,Object>>> packagesToNotify = [:]
                     /*
                         structure:
                         { packageUUID: [
@@ -255,10 +255,14 @@ class GlobalSourceSyncService extends AbstractLockableService {
                             break
                         case RECTYPE_TIPP: componentType = 'TitleInstancePackagePlatform'
                             int maxLoad = 1000, offset = 0
+                            String scrollId
                             boolean more = true
                             while(more) {
-                                Map<String,Object> result = fetchRecordJSON(false,[component_type: componentType,changedSince:sdf.format(oldDate)])
-                                if(result.count > 0) {
+                                Map<String,Object> result
+                                if(scrollId)
+                                    result = fetchRecordJSON(false,[scrollId: scrollId])
+                                else result = fetchRecordJSON(false,[component_type: componentType,changedSince:sdf.format(oldDate)])
+                                if(result && result.count > 0) {
                                     List<Map> records = (List<Map>) result.records
                                     //continue here: translate the OAI methods into JSON processing
                                     //!!!! TitleInstance information will not be recorded separately in the ES-Mapping !!!!
@@ -329,12 +333,12 @@ class GlobalSourceSyncService extends AbstractLockableService {
                                                 updatedTIPP.coverages = updatedTIPP.coverages.toSorted { a, b -> a.startDate <=> b.startDate }
                                             }
                                             Map<String,Object> diffs = createOrUpdateTIPP(tippsOnPage.get(updatedTIPP.uuid),updatedTIPP,packagesOnPage,platformsOnPage)
-                                            List<Map<String,Object>> diffsOfPackage = packagesToNotify.get(updatedTIPP.packageUUID)
+                                            Set<Map<String,Object>> diffsOfPackage = packagesToNotify.get(updatedTIPP.packageUUID)
                                             if(!diffsOfPackage)
                                                 diffsOfPackage = []
                                             diffsOfPackage << diffs
                                             if(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
-                                                diffsOfPackage.addAll(pkgPropDiffsContainer.get(updatedTIPP.packageUUID))
+                                                diffsOfPackage.addAll(pkgPropDiffsContainer.get(updatedTIPP.packageUUID)) //test with set, otherwise make check
                                             packagesToNotify.put(updatedTIPP.packageUUID,diffsOfPackage)
                                             Date lastUpdatedTime = sdf.parse(tipp.lastUpdatedDisplay)
                                             if(lastUpdatedTime.getTime() > maxTimestamp) {
@@ -347,7 +351,7 @@ class GlobalSourceSyncService extends AbstractLockableService {
                                         }
                                     }
                                     if(result.hasMoreRecords) {
-                                        result = fetchRecordJSON(false,[component_type: componentType,changedSince:sdf.format(oldDate),scrollId:result.scrollId])
+                                        scrollId = result.scrollId
                                     }
                                     else {
                                         more = false
@@ -368,7 +372,6 @@ class GlobalSourceSyncService extends AbstractLockableService {
                     }
                     if(packagesToNotify.keySet().size() > 0) {
                         log.info("notifying subscriptions ...")
-                        changeNotificationSerivce.setInitialPackagesCounter(initialPackagesCounter)
                         changeNotificationService.notifyLinkedSubscriptions(packagesToNotify)
                     }
                     else {
@@ -384,6 +387,29 @@ class GlobalSourceSyncService extends AbstractLockableService {
             }
         }
         running = false
+    }
+
+    /**
+     * This is the change notification processor for the JSON-based (i.e. new) sync logic
+     * @param packagesToNotify
+     */
+    void notifyLinkedSubscriptions(Map<String,List<Map<String,Object>>> packagesToNotify) {
+        Package.withSession { Session sess ->
+            //loop through all packages
+            packagesToNotify.each { String packageUUID, List<Map<String,Object>> diffsOfPackage ->
+                if(diffsOfPackage.find { Map<String,Object> diff -> diff.event in [PendingChangeConfiguration.NEW_TITLE,PendingChangeConfiguration.TITLE_DELETED] }) {
+                    int newCount = TitleInstancePackagePlatform.executeQuery('select count(tipp.id) from TitleInstancePackagePlatform tipp where tipp.pkg.gokbId = :gokbId',[gokbId:packageUUID])[0]
+                    String newValue = newCount.toString()
+                    String oldValue = initialPackagesCounter.get(packageUUID).toString()
+                    PendingChange.construct([msgToken:PendingChangeConfiguration.PACKAGE_TIPP_COUNT_CHANGED,target:Package.findByGokbId(packageUUID),status:RDStore.PENDING_CHANGE_HISTORY,prop:"tippCount",newValue:newValue,oldValue:oldValue])
+                }
+                diffsOfPackage.each { Map<String,Object> diff ->
+                    //PendingChange.construct([msgToken,target,status,prop,newValue,oldValue])
+                    log.debug(diff.toMapString())
+                }
+                sess.flush()
+            }
+        }
     }
 
     Map<String,Object> collectDataToUpdate(GPathResult listOAI, Set<Package> packagesExisting) {
@@ -1242,6 +1268,8 @@ class GlobalSourceSyncService extends AbstractLockableService {
             result.add([prop: 'nominalProvider', newValue: pkgB.contentProvider?.name, oldValue: pkgA.contentProvider?.name])
         }
 
+        //the tipp diff count cannot be executed at this place because it depends on TIPP processing result
+
         result
     }
 
@@ -1334,8 +1362,8 @@ class GlobalSourceSyncService extends AbstractLockableService {
                     [event: 'update', target: tippA, diffs: diffs]
                 else throw new SyncException("Error on updating TIPP with UUID ${tippA.gokbId}: ${tippA.errors}")
             }
+            else [:]
         }
-        null
     }
 
     /**
@@ -1723,7 +1751,7 @@ class GlobalSourceSyncService extends AbstractLockableService {
         //By then, I should query the "normal" endpoint /gokb/api/find?
         HTTPBuilder http
         if(singleObject)
-            http = new HTTPBuilder(apiSource.baseUrl+apiSource.fixToken+'/scroll')
+            http = new HTTPBuilder(apiSource.baseUrl+apiSource.fixToken+'/find')
         else http = new HTTPBuilder(source.uri)
         Map<String,Object> result = [:]
         http.request(Method.POST, ContentType.JSON) { req ->
@@ -1734,7 +1762,7 @@ class GlobalSourceSyncService extends AbstractLockableService {
                     result.records = json.records
                     result.count = json.size
                     result.scrollId = json.scrollId
-                    result.hasMoreRecords = json.hasMoreRecords
+                    result.hasMoreRecords = Boolean.valueOf(json.hasMoreRecords)
                 }
                 else {
                     throw new SyncException("erroneous response")

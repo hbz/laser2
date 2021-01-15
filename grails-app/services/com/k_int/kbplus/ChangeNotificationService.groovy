@@ -37,10 +37,6 @@ class ChangeNotificationService extends AbstractLockableService {
     // N,B, This is critical for this service as it's called from domain object OnChange handlers
     static transactional = false
 
-    void setInitialPackagesCounter(Map<String,Integer> initialPackagesCounter) {
-        this.initialPackagesCounter = initialPackagesCounter
-    }
-
   void broadcastEvent(String contextObjectOID, changeDetailDocument) {
     // log.debug("broadcastEvent(${contextObjectOID},${changeDetailDocument})");
 
@@ -410,40 +406,6 @@ class ChangeNotificationService extends AbstractLockableService {
         }
     }
 
-    /**
-     * This is the change notification processor for the JSON-based (i.e. new) sync logic
-     * @param packagesToNotify
-     */
-    void notifyLinkedSubscriptions(Map<String,List<Map<String,Object>>> packagesToNotify) {
-        de.laser.Package.withSession { Session sess ->
-            subscribersWithConfig = SubscriptionPackage.executeQuery('select sp from PendingChangeConfiguration pcc join pcc.subscriptionPackage sp where sp.pkg.gokbId in (:gokbIds) and sp.subscription.instanceOf = null',[gokbIds:packagesToNotify.keySet()])
-            //loop through all packages
-            packagesToNotify.each { String packageUUID, List<Map<String,Object>> diffsOfPackage ->
-                Map<String,Object> tippCountDiff = [:]
-                if(diffsOfPackage.find { Map<String,Object> diff -> diff.event in [PendingChangeConfiguration.NEW_TITLE,PendingChangeConfiguration.TITLE_DELETED] }) {
-                    int newCount = TitleInstancePackagePlatform.executeQuery('select count(tipp.id) from TitleInstancePackagePlatform tipp where tipp.pkg.gokbId = :gokbId',[gokbId:packageUUID])[0]
-                    tippCountDiff.event = "tippCountAffected"
-                    tippCountDiff.newValue = newCount
-                    tippCountDiff.oldValue = initialPackagesCounter.get(packageUUID)
-                }
-                //get all top-level subscriptions (i.e. subscription.instanceOf = null) resp. their pending change configuration maps for lookup
-                Set<SubscriptionPackage> allSubscribersOfPackage = SubscriptionPackage.executeQuery('select sp from SubscriptionPackage sp where sp.pkg.gokbId = :gokbId',[gokbId:packageUUID])
-                //process diff, one by one
-                diffsOfPackage.each { Map<String,Object> diff ->
-                    allSubscribersOfPackage.each { SubscriptionPackage subscriber ->
-                        checkNotificationConfiguration(subscriber,diff)
-                    }
-                }
-                if(tippCountDiff) {
-                    allSubscribersOfPackage.each { SubscriptionPackage subscriber ->
-                        checkNotificationConfiguration(subscriber,tippCountDiff)
-                    }
-                }
-                sess.flush()
-            }
-        }
-    }
-
     void checkNotificationConfiguration(SubscriptionPackage subscriber, Map<String,Object> diff) {
         /*
         decision tree:
@@ -509,23 +471,21 @@ class ChangeNotificationService extends AbstractLockableService {
             RefdataValue settingValue = RDStore.PENDING_CHANGE_CONFIG_PROMPT
             if(pcc)
                 settingValue = pcc.settingValue
-            switch(settingValue) {
-                case RDStore.PENDING_CHANGE_CONFIG_ACCEPT:
-                    //set up notification on dashboard and push diff processing to issue entitlement
-                    //I need to perform the change on the issue entitlement which reflects the TIPP, then, a message which notifies about the change
-                    /* There should come a new status History for Pending Changes; this supersedes the old status.
-                    This aims the TIPP level. When accepting a pending change, the equivalent data for the subscriber should be retrieved.
-                    There should be an on-the-fly check of diffs between the holding and the base package.
-                    Check each history event which has not been marked as superseded if it has been applied.
-                    If there is a diff, the change should be marked as open, otherwise display as that happened.
-                    Changes should be grouped by TIPPs. */
-                    break
-                case RDStore.PENDING_CHANGE_CONFIG_PROMPT:
-                    //set up notification on dashboard only
-                    //I need the target subscription, the package and the change to record, no object for each difference!
-                    break
-            //else do nothing
+            PendingChange pc = PendingChange.construct([])
+            if(settingValue == RDStore.PENDING_CHANGE_CONFIG_ACCEPT) {
+                //set up notification on dashboard and push diff processing to issue entitlement
+                // I need to perform the change on the issue entitlement which reflects the TIPP, then, a message which notifies about the change
+                /*
+                There should come a new status History for Pending Changes; this supersedes the old status.
+                This aims the TIPP level. When accepting a pending change, the equivalent data for the subscriber should be retrieved.
+                There should be an on-the-fly check of diffs between the holding and the base package.
+                Check each history event which has not been marked as superseded if it has been applied.
+                If there is a diff, the change should be marked as open, otherwise display as that happened.
+                Changes should be grouped by TIPPs.
+                */
             }
+            //else do nothing - set up notification on dashboard only
+            //I need the target title, the package and the change to record, no object for each difference!
         }
 
     }
