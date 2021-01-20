@@ -14,7 +14,7 @@
 </semui:breadcrumbs>
 
 <h1 class="ui left floated aligned icon header la-clear-before"><semui:headerIcon/>${message(code: 'package.show.all')}
-<semui:totalNumber total="${resultsTotal2}"/>
+<semui:totalNumber total="${recordsCount}"/>
 </h1>
 
 <semui:messages data="${flash}"/>
@@ -24,17 +24,42 @@
     <g:form action="index" method="get" params="${params}" class="ui form">
         <input type="hidden" name="offset" value="${params.offset}"/>
 
-        <div class="field">
-            <label>${message(code: 'home.search.text')}: ${message(code: 'package.show.pkg_name')}, ${message(code: 'package.content_provider')}</label>
-            <input name="q" placeholder="${message(code:'default.search.ph')}" value="${params.q}"/>
+        <div class="three fields">
+            <div class="field">
+                <label for="search-title">
+                    <g:message code='default.search.text'/>
+                    <span data-position="right center" data-variation="tiny" class="la-popup-tooltip la-delay" data-content="${message(code:'default.search.tooltip.package')}">
+                        <i class="question circle icon"></i>
+                    </span>
+                </label>
+                <input id="search-title" name="q" placeholder="${message(code:'default.search.ph')}" value="${params.q}"/>
+            </div>
+
+            <%-- not implemented until ERMS-3044 is finalised --%>
+            <div class="field">
+                <label for="provider"><g:message code='default.provider.label'/></label>
+                <input id="provider"/>
+            </div>
+            <div class="field">
+                <label for="componentType"><g:message code='subscription.resource.label'/></label>
+                <input id="componentType"/>
+            </div>
         </div>
 
-        <div class="field la-field-right-aligned">
-            <a href="${request.forwardURI}"
-               class="ui reset primary button">${message(code: 'default.button.filterreset.label')}</a>
-            <button type="submit" name="search" value="yes"
-                    class="ui secondary button">${message(code: 'default.button.filter.label')}</button>
+        <div class="three fields">
+            <div class="field">
+                <label for="curatoryGroup"><g:message code='package.curatoryGroup.label'/></label>
+                <input id="curatoryGroup"/>
+            </div>
+            <div class="field"></div>
+            <div class="field la-field-right-aligned">
+                <a href="${request.forwardURI}"
+                   class="ui reset primary button">${message(code: 'default.button.filterreset.label')}</a>
+                <button type="submit" name="search" value="yes"
+                        class="ui secondary button">${message(code: 'default.button.filter.label')}</button>
+            </div>
         </div>
+
     </g:form>
 </semui:filter>
 <div class="ui icon info message">
@@ -58,15 +83,16 @@
                     <thead>
                     <tr>
                         <th>${message(code: 'sidewide.number')}</th>
-                        <g:sortableColumn property="name"
-                                          title="${message(code: 'package.show.pkg_name')}"
+                        <g:sortableColumn property="name" title="${message(code: 'package.show.pkg_name')}"
                                           params="${params}"/>
-                        <th>${message(code: 'package.compare.overview.tipps')}</th>
+                        <g:sortableColumn property="titleCount" title="${message(code: 'package.compare.overview.tipps')}"
+                                          params="${params}"/>
                         <g:sortableColumn property="providerName" title="${message(code: 'package.content_provider')}"
                                           params="${params}"/>
-                        <g:sortableColumn property="platformName" title="${message(code: 'package.nominalPlatform')}"
+                        <g:sortableColumn property="nominalPlatformName" title="${message(code: 'package.nominalPlatform')}"
                                           params="${params}"/>
-                        <th>${message(code: 'package.curatoryGroup.label')}</th>
+                        <g:sortableColumn property="curatoryGroups" title="${message(code: 'package.curatoryGroup.label')}"
+                                          params="${params}"/>
                         <th>${message(code: 'package.listVerifiedDate.label')}</th>
                         <th>${message(code: 'package.scope')}</th>
                         <th>${message(code: 'package.contentType.label')}</th>
@@ -168,7 +194,7 @@
             <semui:paginate action="index" controller="package" params="${params}"
                             next="${message(code: 'default.paginate.next')}"
                             prev="${message(code: 'default.paginate.prev')}" max="${max}"
-                            total="${resultsTotal2}"/>
+                            total="${recordsCount}"/>
 
         </g:if>
         <g:else>

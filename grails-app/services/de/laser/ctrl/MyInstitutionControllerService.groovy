@@ -12,6 +12,7 @@ import grails.plugin.springsecurity.SpringSecurityUtils
 import grails.web.servlet.mvc.GrailsParameterMap
 
 import java.text.SimpleDateFormat
+import java.util.concurrent.ExecutorService
 
 @Transactional
 class MyInstitutionControllerService {
@@ -23,6 +24,7 @@ class MyInstitutionControllerService {
     def pendingChangeService
     def surveyService
     def taskService
+    ExecutorService executorService
 
     static final int STATUS_OK = 0
     static final int STATUS_ERROR = 1
@@ -39,16 +41,11 @@ class MyInstitutionControllerService {
         result.is_inst_admin = accessService.checkMinUserOrgRole(result.user, result.institution, 'INST_ADM')
 
         SwissKnife.setPaginationParams(result, params, (User) result.user)
-        //result.pendingOffset = 0
-        //result.acceptedOffset = 0
+        result.acceptedOffset = 0
         result.dashboardDueDatesOffset = 0
         switch(params.view) {
-            /*
-            case 'PendingChanges': result.pendingOffset = result.offset
-                break
             case 'AcceptedChanges': result.acceptedOffset = result.offset
                 break
-             */
             case 'dueDatesView': result.dashboardDueDatesOffset = result.offset
                 break
         }
@@ -57,9 +54,12 @@ class MyInstitutionControllerService {
 
         // changes
 
-        //Map<String,Object> pendingChangeConfigMap = [contextOrg:result.institution,consortialView:accessService.checkPerm(result.institution,"ORG_CONSORTIUM"),periodInDays:periodInDays,max:result.max,pendingOffset:result.pendingOffset,acceptedOffset:result.acceptedOffset,pending:true,notifications:true]
+        Map<String,Object> pendingChangeConfigMap = [contextOrg:result.institution,consortialView:accessService.checkPerm(result.institution,"ORG_CONSORTIUM"),periodInDays:periodInDays,max:result.max,acceptedOffset:result.acceptedOffset,notifications:true]
         pu.setBenchmark('pending changes')
-        //result.putAll(pendingChangeService.getChanges(pendingChangeConfigMap))
+        result.putAll(pendingChangeService.getChanges(pendingChangeConfigMap))
+        executorService.execute({
+            pendingChangeService.autoAcceptPendingChanges(result.institution)
+        })
 
         // systemAnnouncements
         pu.setBenchmark('system announcements')

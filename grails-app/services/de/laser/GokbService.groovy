@@ -30,127 +30,16 @@ class GokbService {
             result.records = []
 
             if (json?.info?.records) {
-
                 json.info.records.each { r ->
-                    def pkg = [:]
-
-                    pkg.id = r.id
-                    pkg.uuid = r.uuid
-                    pkg.componentType = r.componentType
-
-                    pkg.identifiers = []
-                    r.identifiers?.each{ id ->
-                        pkg.identifiers.add([namespace:id.namespace, value:id.value]);
-                    }
-
-                    pkg.altnames = []
-                    r.altname?.each{ name ->
-                        pkg.altnames.add(name);
-                    }
-
-                    pkg.variantNames = []
-                    r.variantNames?.each{ name ->
-                        pkg.variantNames.add(name);
-                    }
-
-                    pkg.updater = r.updater
-                    pkg.listStatus = r.listStatus
-                    pkg.listVerifiedDate = (r.listVerifiedDate != "null") ? r.listVerifiedDate : ''
-                    pkg.contentType = (r.contentType != "null") ? r.contentType : ''
-                    //pkg.consistent = r.consistent
-                    //pkg.global = r.global
-
-                    pkg.curatoryGroups = []
-                    r.curatoryGroups?.each{ curatoryGroup ->
-                        pkg.curatoryGroups.add(curatoryGroup);
-                    }
-
-                    pkg.titleCount = r.titleCount
-                    pkg.scope = (r.scope != "null") ? r.scope : ''
-                    pkg.name = (r.name != "null") ? r.name: ''
-                    pkg.sortname = (r.sortname != "null") ? r.sortname: ''
-                    //pkg.fixed = r.fixed
-                    pkg.platformName = (r.nominalPlatformName != "null") ? r.nominalPlatformName : ''
-                    pkg.platformUuid = r.nominalPlatformUuid ?: ''
-                    //pkg.breakable = r.breakable
-                    pkg.providerName = (r.cpname != "null") ? r.cpname : ''
-                    pkg.provider = r.provider
-                    pkg.providerUuid = r.providerUuid ?: ''
-                    pkg.status = r.status ?: ''
-                    pkg.description = (r.description != "null") ? r.description: ''
-                    pkg.descriptionURL = r.descriptionURL ?: ''
-
-                    pkg.lastUpdatedDisplay = r.lastUpdatedDisplay
-
-                    pkg.url = apiSource.baseUrl
-                    pkg.editUrl = apiSource.editUrl
-
                     if(r.uuid && r.uuid != "null") {
-                        result.records << pkg
+                        result.records << extractPackage(r,apiSource)
                     }
                 }
             }
             if (json?.warning?.records) {
-
                 json.warning.records.each { r ->
-                    def pkg = [:]
-
-                    pkg.id = r.id
-                    pkg.uuid = r.uuid
-                    pkg.componentType = r.componentType
-
-                    pkg.identifiers = []
-                    r.identifiers?.each{ id ->
-                        pkg.identifiers.add([namespace:id.namespace, value:id.value]);
-                    }
-
-                    pkg.altnames = []
-                    r.altname?.each{ name ->
-                        pkg.altnames.add(name);
-                    }
-
-                    pkg.variantNames = []
-                    r.variantNames?.each{ name ->
-                        pkg.variantNames.add(name);
-                    }
-
-                    pkg.updater = r.updater
-                    pkg.listStatus = r.listStatus
-                    pkg.listVerifiedDate = (r.listVerifiedDate != "null") ? r.listVerifiedDate : ''
-                    pkg.contentType = (r.contentType != "null") ? r.contentType : ''
-                    //pkg.consistent = r.consistent
-                    //pkg.global = r.global
-                    pkg.listVerifiedDate = r.listVerifiedDate
-
-                    pkg.curatoryGroups = []
-                    r.curatoryGroups?.each{ curatoryGroup ->
-                        pkg.curatoryGroups.add(curatoryGroup);
-                    }
-
-                    pkg.titleCount = r.titleCount
-                    pkg.scope = (r.scope != "null") ? r.scope : ''
-                    pkg.name = (r.name != "null") ? r.name: ''
-                    pkg.sortname = (r.sortname != "null") ? r.sortname: ''
-                    //pkg.fixed = r.fixed
-                    pkg.platformName = (r.nominalPlatformName != "null") ? r.nominalPlatformName : ''
-                    pkg.platformUuid = r.nominalPlatformUuid ?: ''
-                    //pkg.breakable = r.breakable
-                    pkg.providerName = (r.cpname != "null") ? r.cpname : ''
-                    pkg.provider = r.provider
-                    pkg.providerUuid = r.providerUuid ?: ''
-                    pkg.status = r.status ?: ''
-                    pkg.description = (r.description != "null") ? r.description: ''
-                    pkg.descriptionURL = r.descriptionURL ?: ''
-
-
-
-                    pkg.lastUpdatedDisplay = r.lastUpdatedDisplay
-
-                    pkg.url = apiSource.baseUrl
-                    pkg.editUrl = apiSource.editUrl
-
                     if(r.uuid && r.uuid != "null") {
-                        result.records << pkg
+                        result.records << extractPackage(r,apiSource)
                     }
                 }
             }
@@ -162,6 +51,60 @@ class GokbService {
         result
     }
 
+    Map extractPackage(Map<String,Object> r, ApiSource apiSource) {
+        Map<String,Object> pkg = [:]
+        pkg.id = r.id
+        pkg.uuid = r.uuid
+        pkg.componentType = r.componentType
+
+        pkg.identifiers = []
+        r.identifiers?.each{ id ->
+            pkg.identifiers.add([namespace:id.namespace, value:id.value]);
+        }
+
+        pkg.altnames = []
+        r.altname?.each{ name ->
+            pkg.altnames.add(name);
+        }
+
+        pkg.variantNames = []
+        r.variantNames?.each{ name ->
+            pkg.variantNames.add(name);
+        }
+
+        pkg.updater = r.updater
+        pkg.listStatus = r.listStatus
+        pkg.listVerifiedDate = (r.listVerifiedDate != "null") ? r.listVerifiedDate : ''
+        pkg.contentType = (r.contentType != "null") ? r.contentType : ''
+        //pkg.consistent = r.consistent
+        //pkg.global = r.global
+
+        pkg.curatoryGroups = []
+        r.curatoryGroups?.each{ curatoryGroup ->
+            pkg.curatoryGroups.add(curatoryGroup);
+        }
+
+        pkg.titleCount = r.titleCount
+        pkg.scope = (r.scope != "null") ? r.scope : ''
+        pkg.name = (r.name != "null") ? r.name: ''
+        pkg.sortname = (r.sortname != "null") ? r.sortname: ''
+        //pkg.fixed = r.fixed
+        pkg.platformName = (r.nominalPlatformName != "null") ? r.nominalPlatformName : ''
+        pkg.platformUuid = r.nominalPlatformUuid ?: ''
+        //pkg.breakable = r.breakable
+        pkg.providerName = (r.cpname != "null") ? r.cpname : ''
+        pkg.provider = r.provider
+        pkg.providerUuid = r.providerUuid ?: ''
+        pkg.status = r.status ?: ''
+        pkg.description = (r.description != "null") ? r.description: ''
+        pkg.descriptionURL = r.descriptionURL ?: ''
+
+        pkg.lastUpdatedDisplay = r.lastUpdatedDisplay
+
+        pkg.url = apiSource.baseUrl
+        pkg.editUrl = apiSource.editUrl
+        pkg
+    }
 
     Map geElasticsearchSuggests(final String apiUrl, final String query, final String type, final String role) {
         String url = buildUri(apiUrl+'/suggest', query, type, role, null)
@@ -201,7 +144,7 @@ class GokbService {
         result
     }
 
-    private String buildUri(final String stub, final String query, final String type, final String role, final Integer max) {
+    private String buildUri(final String stub, final String query, final String type, final String role, final Integer max, final String sort = "name", final String order = "asc") {
         String url = stub + "?status=Current&"
         if (query) {
             url += "q=" + query + "&"
@@ -214,6 +157,12 @@ class GokbService {
         }
         if (max){
             url += "max=" + max + "&"
+        }
+        if (sort){
+            url += "sort=" + sort + "&"
+        }
+        if (order){
+            url += "order=" + order + "&"
         }
         url.substring(0, url.length() - 1)
     }

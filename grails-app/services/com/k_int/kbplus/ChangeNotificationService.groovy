@@ -1,6 +1,6 @@
 package com.k_int.kbplus
 
-import de.laser.TitleInstancePackagePlatform
+
 import de.laser.auth.User
 import de.laser.AuditConfig
 import de.laser.ChangeNotificationQueueItem
@@ -19,7 +19,6 @@ import de.laser.interfaces.AbstractLockableService
 import grails.converters.JSON
 import grails.gorm.transactions.Transactional
 import org.grails.web.json.JSONElement
-import org.hibernate.Session
 
 import java.sql.Timestamp
 import java.util.concurrent.ExecutorService
@@ -406,88 +405,44 @@ class ChangeNotificationService extends AbstractLockableService {
         }
     }
 
-    void checkNotificationConfiguration(SubscriptionPackage subscriber, Map<String,Object> diff) {
-        /*
-        decision tree:
-            is there a pending change configuration for the given package?
-            - yes: process
-            - no: use fallback - prompt
-         */
-        SubscriptionPackage sp = subscribersWithConfig.find { SubscriptionPackage row -> row.id == subscriber.id }
-        if(sp) {
-            //config exists for subscriber
-            String msgToken
-            switch(diff.event) {
-                case "add": msgToken = PendingChangeConfiguration.NEW_TITLE
-                    break
-                case "delete": msgToken = PendingChangeConfiguration.TITLE_DELETED
-                    break
-                case "update":
-                    if(diff.prop == "coverage") {
-                        //covEntry again ... the city Coventry is still beautiful ... but here is the COVerageENTRY meant.
-                        diff.covDiffs.each {covEntry ->
-                            switch(covEntry.event) {
-                                case "update": msgToken = PendingChangeConfiguration.COVERAGE_UPDATED
-                                    break
-                                case "add": msgToken = PendingChangeConfiguration.NEW_COVERAGE
-                                    break
-                                case "delete": msgToken = PendingChangeConfiguration.COVERAGE_DELETED
-                                    break
-                                default: msgToken = null
-                                    break
-                            }
-                            if(msgToken)
-                                createNotificationIfNecessary(sp,covEntry,msgToken)
+    void createNotification(Map<String,Object> diff) {
+        String msgToken
+        switch(diff.event) {
+            case "add": msgToken = PendingChangeConfiguration.NEW_TITLE
+                break
+            case "delete": msgToken = PendingChangeConfiguration.TITLE_DELETED
+                break
+            case "update":
+                if(diff.prop == "coverage") {
+                    //covEntry again ... the city Coventry is still beautiful ... but here is the COVerageENTRY meant.
+                    diff.covDiffs.each {covEntry ->
+                        switch(covEntry.event) {
+                            case "update": msgToken = PendingChangeConfiguration.COVERAGE_UPDATED
+                                break
+                            case "add": msgToken = PendingChangeConfiguration.NEW_COVERAGE
+                                break
+                            case "delete": msgToken = PendingChangeConfiguration.COVERAGE_DELETED
+                                break
+                            default: msgToken = null
+                                break
                         }
+                        if(msgToken)
+                            PendingChange.construct([msgToken:msgToken, prop: covEntry.prop, target: covEntry.target, oldValue: covEntry.oldValue, newValue: covEntry.newValue, status: RDStore.PENDING_CHANGE_HISTORY])
                     }
-                    else msgToken = PendingChangeConfiguration.TITLE_UPDATED
-                    break
-                case "pkgPropUpdate": msgToken = PendingChangeConfiguration.PACKAGE_PROP
-                    break
-                case "tippCountAffected": msgToken = PendingChangeConfiguration.PACKAGE_TIPP_COUNT_CHANGED
-                    break
-                case "pkgDelete": msgToken = PendingChangeConfiguration.PACKAGE_DELETED
-                    break
-            }
-            if(msgToken && diff.prop != "coverage") {
-                createNotificationIfNecessary(sp,diff,msgToken)
-            }
-            else {
-                log.warn("unhandled event type: ${diff.event}")
-            }
+                }
+                else msgToken = PendingChangeConfiguration.TITLE_UPDATED
+                break
+            case "pkgPropUpdate": msgToken = PendingChangeConfiguration.PACKAGE_PROP
+                break
+            case "tippCountAffected": msgToken = PendingChangeConfiguration.PACKAGE_TIPP_COUNT_CHANGED
+                break
+            case "pkgDelete": msgToken = PendingChangeConfiguration.PACKAGE_DELETED
+                break
         }
-    }
-
-    void createNotificationIfNecessary(SubscriptionPackage sp, Map<String,Object> diff, String msgToken) {
-        if(msgToken == PendingChangeConfiguration.PACKAGE_TIPP_COUNT_CHANGED) {
-            PendingChangeConfiguration onNewTipp = sp.pendingChangeConfig.find { PendingChangeConfiguration subRow -> subRow.settingKey == PendingChangeConfiguration.NEW_TITLE }
-            PendingChangeConfiguration onDeletedTipp = sp.pendingChangeConfig.find { PendingChangeConfiguration subRow -> subRow.settingKey == PendingChangeConfiguration.TITLE_DELETED }
-            if(onNewTipp.settingValue != RDStore.PENDING_CHANGE_CONFIG_REJECT && onDeletedTipp.settingValue != RDStore.PENDING_CHANGE_CONFIG_REJECT) {
-                //set up notification on dashboard
-            }
+        if(msgToken) {
+            PendingChange.construct([msgToken:msgToken,prop:diff.prop,target:diff.target,oldValue:diff.oldValue,newValue:diff.newValue,status:RDStore.PENDING_CHANGE_HISTORY])
         }
-        else {
-            PendingChangeConfiguration pcc = sp.pendingChangeConfig.find { PendingChangeConfiguration subRow -> subRow.settingKey == msgToken }
-            RefdataValue settingValue = RDStore.PENDING_CHANGE_CONFIG_PROMPT
-            if(pcc)
-                settingValue = pcc.settingValue
-            PendingChange pc = PendingChange.construct([])
-            if(settingValue == RDStore.PENDING_CHANGE_CONFIG_ACCEPT) {
-                //set up notification on dashboard and push diff processing to issue entitlement
-                // I need to perform the change on the issue entitlement which reflects the TIPP, then, a message which notifies about the change
-                /*
-                There should come a new status History for Pending Changes; this supersedes the old status.
-                This aims the TIPP level. When accepting a pending change, the equivalent data for the subscriber should be retrieved.
-                There should be an on-the-fly check of diffs between the holding and the base package.
-                Check each history event which has not been marked as superseded if it has been applied.
-                If there is a diff, the change should be marked as open, otherwise display as that happened.
-                Changes should be grouped by TIPPs.
-                */
-            }
-            //else do nothing - set up notification on dashboard only
-            //I need the target title, the package and the change to record, no object for each difference!
-        }
-
+        // I need to perform the change on the issue entitlement which reflects the TIPP, then, a message which notifies about the change -> done in subscription service
     }
 
 }

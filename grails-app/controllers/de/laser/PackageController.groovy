@@ -45,62 +45,37 @@ class PackageController  {
     @Secured(['ROLE_USER'])
     def index() {
 
+        if (!ApiSource.findAllByTypAndActive(ApiSource.ApiTyp.GOKBAPI, true)) {
+            redirect controller: 'package', action: 'list'
+            return
+        }
+
         Map<String, Object> result = [:]
         result.user = contextService.getUser()
-        params.max = params.max ?: result.user.getDefaultPageSize()
+        SwissKnife.setPaginationParams(result, params, result.user)
 
-            if (params.q == "") params.remove('q');
+        String esQuery = "?"
+        if(params.q) {
+            //for ElasticSearch
+            esQuery += "name=${params.name}&"
+            //the result set has to be broadened down by IdentifierNamespace queries! Problematic if the package is not in LAS:eR yet!
+        }
+        /*
+        to implement:
+        - provider
+        - componentType
+        - series
+        - subjectArea
+        - curatoryGroup
+        - year (combination of dateFirstPrint and dateFirstOnline)
+         */
 
-            if (params.search.equals("yes")) {
-                //when searching make sure results start from first page
-                params.offset = 0
-                params.remove("search")
-            }
+        String sort = params.sort ?: "sortname"
+        String order = params.order ?: "asc"
 
-            def old_q = params.q
-            def old_sort = params.sort
-
-            if (!ApiSource.findAllByTypAndActive(ApiSource.ApiTyp.GOKBAPI, true)) {
-                redirect controller: 'package', action: 'list'
-                return
-            }
-
-            def gokbRecords = []
-
-            ApiSource.findAllByTypAndActive(ApiSource.ApiTyp.GOKBAPI, true).each { api ->
-                gokbRecords << gokbService.getPackagesMap(api, params.q, false).records
-            }
-
-            params.sort = params.sort ?: 'name'
-            params.order = params.order ?: 'asc'
-
-            result.records = gokbRecords ? gokbRecords.flatten().sort() : null
-
-            result.records?.sort { x, y ->
-                if (params.order == 'desc') {
-                    y."${params.sort}".toString().compareToIgnoreCase x."${params.sort}".toString()
-                } else {
-                    x."${params.sort}".toString().compareToIgnoreCase y."${params.sort}".toString()
-                }
-            }
-
-            result.resultsTotal2 = result.records?.size()
-
-            Integer start = params.offset ? params.int('offset') : 0
-            Integer end = params.offset ? params.int('max') + params.int('offset') : params.int('max')
-            end = (end > result.records?.size()) ? result.records?.size() : end
-
-            result.records = result.records?.subList(start, end)
-
-            //Double-Quoted search strings wont display without this
-            params.q = old_q?.replace("\"", "&quot;")
-
-            if (!old_q) {
-                params.remove('q')
-            }
-            if (!old_sort) {
-                params.remove('sort')
-            }
+        Map queryResult = gokbService.queryElasticsearch()
+        result.recordsCount = records.size()
+        result.records = records.drop(result.offset).take(result.max)
 
         result
     }

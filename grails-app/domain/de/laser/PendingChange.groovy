@@ -8,7 +8,6 @@ import de.laser.helper.DateUtils
 import de.laser.helper.RDConstants
 import de.laser.helper.RDStore
 import de.laser.annotations.RefdataAnnotation
-import de.laser.titles.TitleInstance
 import grails.converters.JSON
 import org.grails.web.json.JSONElement
 
@@ -105,6 +104,8 @@ class PendingChange {
         msgToken(nullable:true, blank:false)
         msgParams(nullable:true, blank:false)
         pkg             (nullable:true)
+        tipp            (nullable:true)
+        tippCoverage    (nullable:true)
         costItem        (nullable:true)
         ts              (nullable:true)
         owner           (nullable:true)

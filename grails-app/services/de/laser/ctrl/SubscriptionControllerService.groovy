@@ -1420,6 +1420,39 @@ class SubscriptionControllerService {
         }
     }
 
+    Map<String,Object> entitlementChanges(GrailsParameterMap params) {
+        Map<String,Object> result = getResultGenericsAndCheckAccess(params, AccessService.CHECK_VIEW)
+        if(!result) {
+            [result:null,status:STATUS_ERROR]
+        }
+        else {
+            List<Package> pkgList = result.subscription.packages.collect { SubscriptionPackage sp -> sp.pkg }
+            List<Map<String,Object>> entitlementDiffs = []
+            List<PendingChange> pkgChanges = PendingChange.executeQuery('select pc from PendingChange pc where pc.status = :pkgHistory and pc.pkg in (:pkgList)',[pkgList:pkgList])
+            List<PendingChange> tippChanges = PendingChange.executeQuery('select pc from PendingChange pc where pc.status = :pkgHistory and pc.tipp.pkg in (:pkgList) and pc.msgToken = :updated',[pkgList:pkgList,updated:PendingChangeConfiguration.TITLE_UPDATED])
+            List<PendingChange> covChanges = PendingChange.executeQuery('select pc from PendingChange pc where pc.status = :pkgHistory and pc.tippCoverage.tipp.pkg in (:pkgList) and pc.msgToken = :updated',[pkgList:pkgList,updated:PendingChangeConfiguration.COVERAGE_UPDATED])
+            /*
+                get all changes which has occurred
+                list all changes in general
+                offer for each update for which prompt is the setting (explicitely or by missing setting) a change map with parameter links to accept the change
+                listing must be restricted to subscription package! explicite diff listing only for updates
+                creations and deletions have to be indicated only by numbers (number of tipps / tippCoverages vs. issue entitlements / ieCoverages)
+            */
+            List<IssueEntitlement> iesConcerned = IssueEntitlement.findAllByTippInListAndStatusNotEqual(tippChanges.collect { PendingChange pc -> pc.tipp },RDStore.TIPP_STATUS_DELETED)
+            List<IssueEntitlement> ieCovsConcerned = IssueEntitlement.executeQuery('select ie from IssueEntitlementCoverage ieCov join ieCov.issueEntitlement ie join ie.tipp tipp where tipp in (:tipps) and ie.status != :deleted',[tipps:tippChanges.collect { PendingChange pc -> pc.tipp },daleted:RDStore.TIPP_STATUS_DELETED])
+            tippChanges.each { PendingChange change ->
+                IssueEntitlement issueEntitlement = iesConcerned.find { IssueEntitlement ie -> ie.tipp == change.tipp }
+                switch(change.msgToken) {
+                    case PendingChangeConfiguration.TITLE_UPDATED:
+                        if(issueEntitlement[change.prop] != change.tipp[change.prop])
+                            entitlementDiffs << [prop:change.prop,oldValue:issueEntitlement[change.prop],newValue:change.tipp[change.prop],tipp:change.tipp,msgToken:change.msgToken]
+                        break
+                }
+            }
+            result
+        }
+    }
+
     Map<String,Object> addEntitlements(SubscriptionController controller, GrailsParameterMap params) {
         Map<String,Object> result = getResultGenericsAndCheckAccess(params, AccessService.CHECK_VIEW_AND_EDIT)
         if (!result) {

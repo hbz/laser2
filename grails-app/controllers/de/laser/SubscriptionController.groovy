@@ -647,6 +647,16 @@ class SubscriptionController {
 
     @DebugAnnotation(test = 'hasAffiliation("INST_USER")', ctrlService = 2)
     @Secured(closure = { ctx.contextService.getUser()?.hasAffiliation("INST_USER") })
+    def entitlementChanges() {
+        Map<String, Object> ctrlResult = subscriptionControllerService.entitlementChanges(params)
+        if(!ctrlResult.result) {
+            response.sendError(401)
+        }
+        else ctrlResult.result
+    }
+
+    @DebugAnnotation(test = 'hasAffiliation("INST_USER")', ctrlService = 2)
+    @Secured(closure = { ctx.contextService.getUser()?.hasAffiliation("INST_USER") })
     def addEntitlements() {
         Map<String,Object> ctrlResult = subscriptionControllerService.addEntitlements(this,params)
         if(ctrlResult.status == SubscriptionControllerService.STATUS_ERROR) {

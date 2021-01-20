@@ -1342,8 +1342,8 @@ class GlobalSourceSyncService extends AbstractLockableService {
                                     entry.target.delete()
                                     break
                                 case 'update': entry.diffs.each { covDiff ->
-                                    entry.target[covDiff.prop] = covDiff.newValue
-                                }
+                                        entry.target[covDiff.prop] = covDiff.newValue
+                                    }
                                     if (!entry.target.save())
                                         throw new SyncException("Error on updating coverage statement for TIPP ${tippA.gokbId}: ${entry.target.errors}")
                                     break
