@@ -167,7 +167,7 @@ databaseChangeLog = {
             change {
                 sql.execute ( 'ALTER TABLE property_definition ALTER COLUMN pd_explanation_de TYPE text COLLATE "laser_german_phonebook"' )
                 sql.execute ( 'ALTER TABLE property_definition ALTER COLUMN pd_name_de TYPE varchar(255) COLLATE "laser_german_phonebook"' )
-                sql.execute ( 'ALTER TABLE property_definition ALTER COLUMN pd_name TYPE varchar(255) COLLATE "laser_german_phonebook"' )
+                //sql.execute ( 'ALTER TABLE property_definition ALTER COLUMN pd_name TYPE varchar(255) COLLATE "laser_german_phonebook"' )
                 sql.execute ( 'REINDEX TABLE property_definition' )
             }
         }
@@ -185,7 +185,7 @@ databaseChangeLog = {
     changeSet(author: "klober (modified)", id: "1611910413872-20") {
         grailsChange {
             change {
-                sql.execute ( 'ALTER TABLE refdata_category ALTER COLUMN rdc_description TYPE varchar(255) COLLATE "laser_german_phonebook"' )
+                //sql.execute ( 'ALTER TABLE refdata_category ALTER COLUMN rdc_description TYPE varchar(255) COLLATE "laser_german_phonebook"' )
                 sql.execute ( 'ALTER TABLE refdata_category ALTER COLUMN rdc_description_de TYPE varchar(255) COLLATE "laser_german_phonebook"' )
                 sql.execute ( 'REINDEX TABLE refdata_category' )
             }
@@ -195,7 +195,7 @@ databaseChangeLog = {
     changeSet(author: "klober (modified)", id: "1611910413872-21") {
         grailsChange {
             change {
-                sql.execute ( 'ALTER TABLE refdata_value ALTER COLUMN rdv_value TYPE varchar(255) COLLATE "laser_german_phonebook"' )
+                //sql.execute ( 'ALTER TABLE refdata_value ALTER COLUMN rdv_value TYPE varchar(255) COLLATE "laser_german_phonebook"' )
                 sql.execute ( 'ALTER TABLE refdata_value ALTER COLUMN rdv_value_de TYPE varchar(255) COLLATE "laser_german_phonebook"' )
                 sql.execute ( 'ALTER TABLE refdata_value ALTER COLUMN rdv_explanation_de TYPE text COLLATE "laser_german_phonebook"' )
                 sql.execute ( 'REINDEX TABLE refdata_value' )
