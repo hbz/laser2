@@ -3,7 +3,7 @@
 
 <semui:subNav actionName="${actionName}">
 
-    <semui:subNavItem controller="subscription" action="show" params="${[id:params.id]}" message="subscription.details.details.label" />
+    <semui:subNavItem id="label_subscription_show" controller="subscription" action="show" params="${[id:params.id]}" message="subscription.details.details.label" />
 
     <g:if test="${controllerName != 'finance'}">%{-- template is used by subscriptionDetails/* and finance/index --}%
         <semui:subNavItem controller="subscription" counts="${currentTitlesCounts}" action="index" params="${[id:params.id]}" message="subscription.details.current_ent" />
