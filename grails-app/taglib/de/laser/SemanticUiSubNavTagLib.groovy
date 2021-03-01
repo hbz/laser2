@@ -67,7 +67,8 @@ class SemanticUiSubNavTagLib {
                     controller: attrs.controller,
                     action: attrs.action,
                     params: attrs.params,
-                    role: "Tab"
+                    role: "Tab",
+                    elementId: attrs.id
             )
         }
         else {
@@ -103,7 +104,9 @@ class SemanticUiSubNavTagLib {
                         class: aClass,
                         controller: attrs.controller,
                         action: attrs.action,
-                        params: attrs.params
+                        params: attrs.params,
+                        role: "Tab",
+                        elementId: attrs.id
                 )
             }
             else {
