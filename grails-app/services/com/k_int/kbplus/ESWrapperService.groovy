@@ -7,9 +7,15 @@ import grails.core.GrailsApplication
 import grails.gorm.transactions.Transactional
 import groovy.json.JsonOutput
 import org.apache.http.HttpHost
+import org.apache.http.auth.AuthScope
+import org.apache.http.auth.UsernamePasswordCredentials
+import org.apache.http.client.CredentialsProvider
 import org.apache.http.conn.ConnectTimeoutException
+import org.apache.http.impl.client.BasicCredentialsProvider
+import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
 import org.elasticsearch.action.support.master.AcknowledgedResponse
+import org.elasticsearch.client.RestClientBuilder
 import org.elasticsearch.client.indices.CreateIndexRequest
 import org.elasticsearch.client.indices.CreateIndexResponse
 import org.elasticsearch.client.indices.GetIndexRequest
@@ -54,14 +60,24 @@ class ESWrapperService {
         log.debug("es_indices = ${es_indices}")
         log.debug("es_host = ${es_host}")
 
-        log.debug("ES Init completed");
+        log.debug("ES Init completed")
     }
 
     RestHighLevelClient getClient() {
+        final CredentialsProvider credentialsProvider = new BasicCredentialsProvider()
+        credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(ConfigUtils.getAggrEsUserName(), ConfigUtils.getAggrEsPassword()))
+
         esclient = new RestHighLevelClient(
                 RestClient.builder(
-                        new HttpHost(es_host, 9200, "http"),
-                        new HttpHost(es_host, 9201, "http")));
+                        new HttpHost(es_host, 9200))
+                        .setHttpClientConfigCallback(new RestClientBuilder.HttpClientConfigCallback() {
+                            @Override
+                            public HttpAsyncClientBuilder customizeHttpClient(
+                                    HttpAsyncClientBuilder httpClientBuilder) {
+                                return httpClientBuilder
+                                        .setDefaultCredentialsProvider(credentialsProvider)
+                            }
+                        }))
 
         esclient
     }

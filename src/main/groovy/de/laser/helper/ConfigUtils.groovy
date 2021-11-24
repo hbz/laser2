@@ -27,6 +27,12 @@ class ConfigUtils {
     static String getAggrEsGOKBIndex(boolean validate = false) {
         readConfig('aggr_es_gokb_index', validate)
     }
+    static String getAggrEsUserName(boolean validate = false) {
+        readConfig('aggr_es_username', validate)
+    }
+    static String getAggrEsPassword(boolean validate = false) {
+        readConfig('aggr_es_password', validate)
+    }
     static Object getAppDefaultPrefs(boolean validate = false) {
         readConfig('appDefaultPrefs', validate)
     }
